@@ -28,6 +28,7 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     """Remove validate_patch from ck_jobs_type check constraint."""
+    op.execute("DELETE FROM jobs WHERE job_type = 'validate_patch'")
     op.drop_constraint("ck_jobs_type", "jobs", type_="check")
     op.create_check_constraint(
         "ck_jobs_type",

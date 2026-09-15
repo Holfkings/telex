@@ -136,3 +136,65 @@ async def test_handle_pull_request_closed_unmerged(monkeypatch):
     assert mock_pr.merged_at is None
     assert mock_pr.closed_at is not None
     session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_pull_request_reopened(monkeypatch):
+    repo_id = uuid.uuid4()
+    pr_id = uuid.uuid4()
+
+    mock_repo = Repo(
+        id=repo_id,
+        github_repo_id=12345,
+        full_name="org/repo",
+    )
+
+    mock_pr = PullRequest(
+        id=pr_id,
+        repo_id=repo_id,
+        github_pr_number=44,
+        github_pr_url="https://github.com/org/repo/pull/44",
+        status="closed",
+        merged=False,
+        closed_at=datetime.now(timezone.utc),
+    )
+
+    session = AsyncMock()
+
+    async def fake_execute(stmt):
+        mock_result = MagicMock()
+        stmt_str = str(stmt)
+        if "repos" in stmt_str:
+            mock_result.scalar_one_or_none.return_value = mock_repo
+        elif "pull_requests" in stmt_str:
+            mock_result.scalar_one_or_none.return_value = mock_pr
+        else:
+            mock_result.scalar_one_or_none.return_value = None
+        return mock_result
+
+    session.execute = AsyncMock(side_effect=fake_execute)
+    session.commit = AsyncMock()
+
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=None)
+
+    monkeypatch.setattr("routers.webhooks.AsyncSessionLocal", lambda: mock_ctx)
+
+    payload = {
+        "action": "reopened",
+        "pull_request": {
+            "number": 44,
+        },
+        "repository": {
+            "id": 12345,
+        },
+    }
+
+    await _handle_pull_request(payload)
+
+    assert mock_pr.status == "open"
+    assert mock_pr.closed_at is None
+    assert mock_pr.merged is False
+    assert mock_pr.merged_at is None
+    session.commit.assert_awaited_once()

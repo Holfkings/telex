@@ -2,5 +2,5 @@
 import jwt from "jsonwebtoken";
 
 export function authenticate(token: string, secret: string) {
-  return jwt.verify(token, secret, { algorithms: ["HS256"] });
+  return jwt.verify(token, secret, { algorithms: ["HS256", "HS384", "HS512"] });
 }

@@ -162,15 +162,9 @@ async def test_validate_patch_js_with_tests_produces_full_verification(base_patc
     assert len(enqueued_jobs) == 1
     assert enqueued_jobs[0]["job_type"] == "open_pr"
 
-    # Verify PR body disclosure format
-    from jobs.handlers import open_pr
-    # Check disclosure logic directly
-    mode_display = getattr(vr, "verification_mode", None) or "structural_only"
-    if mode_display == "full":
-        disclosure = "✅ Verified: repo's own test suite and type-checker both passed on this patch."
-    else:
-        disclosure = "⚠️ No test suite detected in this repo — this patch was validated by parse and type-check only, not by running tests."
-
+    # Verify PR body disclosure format via production helper
+    from jobs.handlers.open_pr import format_verification_disclosure
+    disclosure = format_verification_disclosure(vr)
     assert "✅ Verified: repo's own test suite and type-checker both passed on this patch." in disclosure
 
 
@@ -241,13 +235,9 @@ async def test_validate_patch_js_without_tests_produces_structural_only(base_pat
     assert vr.typechecks is True
     assert entities["patch"].verified is True
 
-    # Verify PR disclosure formatting
-    mode_display = getattr(vr, "verification_mode", None) or "structural_only"
-    if mode_display == "full":
-        disclosure = "✅ Verified: repo's own test suite and type-checker both passed on this patch."
-    else:
-        disclosure = "⚠️ No test suite detected in this repo — this patch was validated by parse and type-check only, not by running tests."
-
+    # Verify PR disclosure formatting via production helper
+    from jobs.handlers.open_pr import format_verification_disclosure
+    disclosure = format_verification_disclosure(vr)
     assert "⚠️ No test suite detected in this repo" in disclosure
 
 
@@ -373,6 +363,71 @@ async def test_validate_patch_gating_requires_tests_fails_when_untested(base_pat
         }
 
     monkeypatch.setattr(gh_svc, "wait_for_telex_verification", mock_wait_ci)
+
+    enqueued_jobs = []
+
+    async def mock_enqueue(session, job_type, payload):
+        enqueued_jobs.append({"job_type": job_type, "payload": payload})
+
+    monkeypatch.setattr("jobs.queue.enqueue_job", mock_enqueue)
+
+    await validate_patch.run({"patch_id": str(entities["patch"].id)})
+
+    assert entities["patch"].verified is False
+    assert entities["code_usage"].status == "failed"
+    assert len(enqueued_jobs) == 0
+
+
+@pytest.mark.asyncio
+async def test_validate_patch_incomplete_workflow_fails_even_without_requirements(base_patch_setup, monkeypatch):
+    """
+    Regression test:
+    When wait_for_telex_verification returns completed=False and conclusion=None,
+    the patch must be rejected as failed even when the repository does NOT require
+    tests or typechecks (repo.requires_tests=False, repo.requires_typecheck=False).
+    """
+    import services.github_service as gh_svc
+
+    entities = base_patch_setup
+    entities["repo"].requires_tests = False
+    entities["repo"].requires_typecheck = False
+    mock_session = create_mock_session(entities)
+
+    mock_session_ctx = MagicMock()
+    mock_session_ctx.__aenter__.return_value = mock_session
+    mock_session_ctx.__aexit__.return_value = None
+    monkeypatch.setattr("db.session.AsyncSessionLocal", lambda: mock_session_ctx)
+
+    monkeypatch.setattr(
+        gh_svc,
+        "detect_repo_environment",
+        lambda *args, **kwargs: {
+            "ecosystem": "node",
+            "package_manager": "npm",
+            "install_cmd": "npm ci",
+            "test_cmd": "npm test",
+            "typecheck_cmd": "npx tsc --noEmit",
+            "has_test": True,
+            "has_typecheck": True,
+        },
+    )
+    monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
+    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
+
+    async def mock_wait_ci_incomplete(*args, **kwargs):
+        return {
+            "is_verified": False,
+            "workflow_found": True,
+            "completed": False,
+            "conclusion": None,
+            "typechecks": None,
+            "tests_pass": None,
+            "log": "Workflow timed out or cancelled",
+            "check_runs": [],
+        }
+
+    monkeypatch.setattr(gh_svc, "wait_for_telex_verification", mock_wait_ci_incomplete)
 
     enqueued_jobs = []
 

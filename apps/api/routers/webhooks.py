@@ -198,6 +198,15 @@ async def _handle_pull_request(payload: dict) -> None:
         if not pr:
             return
 
+        if action == "reopened":
+            pr.status = "open"
+            pr.closed_at = None
+            pr.merged = False
+            pr.merged_at = None
+            await session.commit()
+            logger.info("PullRequest %s (#%s) reopened: status=open", pr.id, pr_number)
+            return
+
         if action == "closed":
             is_merged = bool(pr_data.get("merged", False))
             pr.status = "merged" if is_merged else "closed"

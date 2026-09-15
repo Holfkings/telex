@@ -1,3 +1,2 @@
-Breaking change in Pydantic v2.0:
-BaseModel.parse_obj() was deprecated and removed.
-Use BaseModel.model_validate() instead.
+Deprecation migration in Pydantic v2.0:
+BaseModel.parse_obj() was deprecated in v2 in favor of BaseModel.model_validate(); codebases migrating to v2 must update parsing call sites to model_validate().

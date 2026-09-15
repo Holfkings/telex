@@ -11,6 +11,7 @@ export default function DashboardOverview() {
   const [repos, setRepos] = useState<(Repo & { category?: string })[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"personal" | "benchmark">("personal");
 
   const githubInstallUrl = `https://github.com/apps/${
@@ -30,14 +31,18 @@ export default function DashboardOverview() {
 
         if (!isMounted) return;
 
-        if (reposData.status === "fulfilled" && reposData.value) {
-          setRepos(reposData.value as (Repo & { category?: string })[]);
+        if (reposData.status === "fulfilled") {
+          setRepos((reposData.value || []) as (Repo & { category?: string })[]);
+          setApiError(null);
+        } else {
+          setApiError("Unable to fetch repository telemetry from API backend.");
         }
-        if (statsData.status === "fulfilled" && statsData.value) {
+
+        if (statsData.status === "fulfilled") {
           setStats(statsData.value);
         }
-      } catch {
-        // Keep current state
+      } catch (err: any) {
+        if (isMounted) setApiError(err?.message || "Failed to connect to API backend.");
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -57,8 +62,8 @@ export default function DashboardOverview() {
   });
 
   const totalPatches = stats?.patches_generated ?? repos.reduce((acc, r) => acc + (r.patch_count || 0), 0);
-  const totalPrs = stats?.prs_opened ?? Math.max(0, Math.round(totalPatches * 0.15));
-  const mergeRateText = stats ? `${Math.round(stats.merge_rate * 100)}%` : "94%";
+  const totalPrs = stats ? stats.prs_opened : 0;
+  const mergeRateText = stats ? `${Math.round(stats.merge_rate * 100)}%` : "—";
 
   return (
     <div className="flex flex-col gap-6 relative z-10 max-w-7xl mx-auto w-full">
@@ -116,6 +121,28 @@ export default function DashboardOverview() {
           <div className="grid grid-cols-2 md:grid-cols-4 h-24 rounded-xl border border-white/10 bg-black/40" />
           <div className="h-64 rounded-xl border border-white/10 bg-black/30" />
         </div>
+      ) : apiError && repos.length === 0 ? (
+        <SpotlightCard
+          spotlightColor="rgba(255, 255, 255, 0.08)"
+          className="p-8 sm:p-12 bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl flex flex-col items-center text-center gap-4 shadow-2xl"
+          enableTilt={false}
+        >
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center text-white">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z" />
+            </svg>
+          </div>
+          <div className="flex flex-col gap-1 max-w-md">
+            <h2 className="font-mono font-bold text-lg text-white">Unable to Load Telemetry</h2>
+            <p className="font-sans text-xs text-[#A1A1AA]">{apiError}</p>
+          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 rounded-lg bg-white text-black font-mono font-semibold text-xs hover:bg-white/90 transition-all"
+          >
+            Retry Connection
+          </button>
+        </SpotlightCard>
       ) : repos.length === 0 ? (
         /* State 2: Empty State (0 repos connected) */
         <SpotlightCard

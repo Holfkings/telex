@@ -388,6 +388,9 @@ on:
     branches:
       - "{branch_name}"
 
+permissions:
+  contents: read
+
 jobs:
   telex-verify:
     name: Telex Verification Gate

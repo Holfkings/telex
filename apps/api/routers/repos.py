@@ -64,7 +64,7 @@ async def toggle_repo(repo_id: str, body: RepoToggleIn):
     return {"id": repo_id, "is_active": body.is_active}
 
 
-@router.patch("/{repo_id}", response_model=dict)
+@router.patch("/{repo_id}", response_model=dict, dependencies=[Depends(require_auth)])
 async def update_repo_settings(repo_id: str, body: RepoUpdateIn):
     """Update repo verification policy (requires_tests, requires_typecheck) or monitoring status."""
     async with AsyncSessionLocal() as session:
@@ -127,53 +127,65 @@ async def list_patches(repo_id: str):
                 .limit(20)
             )
             res = await session.execute(stmt)
-            for patch_row, cu_row in res.all():
-                # Query associated pull request if opened
-                pr_res = await session.execute(
-                    select(PullRequest)
-                    .where(
-                        PullRequest.repo_id == db_repo.id,
-                        PullRequest.patch_ids.contains([patch_row.id]),
-                    )
-                    .limit(1)
-                )
-                pr_row = pr_res.scalar_one_or_none()
+            pairs = res.all()
 
-                # Query latest validation run
+            if pairs:
+                patch_ids = [p.id for p, _ in pairs]
+                dc_ids = [cu.detected_change_id for _, cu in pairs if cu.detected_change_id]
+
+                # 1. Batch PRs
+                pr_res = await session.execute(
+                    select(PullRequest).where(PullRequest.repo_id == db_repo.id)
+                )
+                pr_rows = pr_res.scalars().all()
+                pr_map = {}
+                for pr in pr_rows:
+                    for pid in (pr.patch_ids or []):
+                        pr_map[pid] = pr
+
+                # 2. Batch ValidationRuns
                 vr_res = await session.execute(
                     select(ValidationRun)
-                    .where(ValidationRun.patch_id == patch_row.id)
+                    .where(ValidationRun.patch_id.in_(patch_ids))
                     .order_by(ValidationRun.created_at.desc())
-                    .limit(1)
                 )
-                vr_row = vr_res.scalar_one_or_none()
+                vr_map = {}
+                for vr in vr_res.scalars().all():
+                    if vr.patch_id not in vr_map:
+                        vr_map[vr.patch_id] = vr
 
-                # Query detected change
-                dc_res = await session.execute(
-                    select(DetectedChange)
-                    .where(DetectedChange.id == cu_row.detected_change_id)
-                    .limit(1)
-                )
-                dc_row = dc_res.scalar_one_or_none()
-
-                patches_out.append(
-                    PatchOut(
-                        id=str(patch_row.id),
-                        package=cu_row.file_path,
-                        old_version="current",
-                        new_version="patched",
-                        status="verified" if patch_row.verified else "generated",
-                        pr_url=pr_row.github_pr_url if pr_row else f"https://github.com/{repo_name}",
-                        usages_patched=1,
-                        opened_at=patch_row.created_at if patch_row.created_at else datetime.now(timezone.utc),
-                        diff=patch_row.diff,
-                        verification_mode=vr_row.verification_mode if vr_row else "structural_only",
-                        tests_passed=vr_row.tests_pass if vr_row else None,
-                        typecheck_passed=vr_row.typechecks if vr_row else None,
-                        change_type=dc_row.change_type if dc_row else None,
-                        change_description=dc_row.description if dc_row else None,
+                # 3. Batch DetectedChanges
+                dc_map = {}
+                if dc_ids:
+                    dc_res = await session.execute(
+                        select(DetectedChange).where(DetectedChange.id.in_(dc_ids))
                     )
-                )
+                    for dc in dc_res.scalars().all():
+                        dc_map[dc.id] = dc
+
+                for patch_row, cu_row in pairs:
+                    pr_row = pr_map.get(patch_row.id)
+                    vr_row = vr_map.get(patch_row.id)
+                    dc_row = dc_map.get(cu_row.detected_change_id)
+
+                    patches_out.append(
+                        PatchOut(
+                            id=str(patch_row.id),
+                            package=cu_row.file_path,
+                            old_version="current",
+                            new_version="patched",
+                            status="verified" if patch_row.verified else "generated",
+                            pr_url=pr_row.github_pr_url if pr_row else f"https://github.com/{repo_name}",
+                            usages_patched=1,
+                            opened_at=patch_row.created_at if patch_row.created_at else datetime.now(timezone.utc),
+                            diff=patch_row.diff,
+                            verification_mode=vr_row.verification_mode if vr_row else "structural_only",
+                            tests_passed=vr_row.tests_pass if vr_row else None,
+                            typecheck_passed=vr_row.typechecks if vr_row else None,
+                            change_type=dc_row.change_type if dc_row else None,
+                            change_description=dc_row.description if dc_row else None,
+                        )
+                    )
 
     return RepoPatchesOut(
         repo=repo_name,

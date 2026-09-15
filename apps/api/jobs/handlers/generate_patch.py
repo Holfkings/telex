@@ -331,18 +331,25 @@ async def run(payload: dict) -> None:
     provider_name = settings.llm_provider_default
     model_name = provider.model_name
 
-    # Request 3 candidate diffs
+    # Request candidate diffs
+    candidates = []
     if hasattr(provider, "generate_patch_candidates"):
-        candidates = await provider.generate_patch_candidates(
-            old_api=old_api,
-            new_api=new_api,
-            code_snippet=code_snippet,
-            context=context,
-            defect_description=defect_description,
-            observed_evidence=observed_evidence,
-            n=3,
-        )
-    else:
+        try:
+            cand_res = await provider.generate_patch_candidates(
+                old_api=old_api,
+                new_api=new_api,
+                code_snippet=code_snippet,
+                context=context,
+                defect_description=defect_description,
+                observed_evidence=observed_evidence,
+                n=3,
+            )
+            if isinstance(cand_res, list) and cand_res:
+                candidates = cand_res
+        except (NotImplementedError, TypeError) as exc:
+            logger.debug("Provider generate_patch_candidates not usable: %s", exc)
+
+    if not candidates:
         single_diff = await provider.generate_patch(
             old_api=old_api,
             new_api=new_api,
@@ -353,21 +360,28 @@ async def run(payload: dict) -> None:
         )
         candidates = [single_diff]
 
-    # Cheap checks filter: validate_patch(candidate, code_snippet)
+    # Cheap checks filter + real micro-apply verification
     # Picks the "best" surviving candidate:
-    # 1. Must pass cheap checks (applies_cleanly and parses and scope_ok)
-    # 2. Heuristic: Smallest diff (minimal surgical edit: fewest lines added/removed)
+    # 1. Must pass structural checks (valid hunk format, parseable, scope_ok)
+    # 2. Must apply cleanly to the actual code content via micro git apply
+    # 3. Heuristic: Smallest diff (fewest modified lines)
+    from services.github_service import apply_diff_to_content
+
     valid_candidates = []
     for cand in candidates:
         if cand and cand != "UNABLE_TO_PATCH":
-            applies, parses, scope_ok = validate_patch(cand, code_snippet)
-            if applies and parses and scope_ok:
-                diff_lines = [
-                    line for line in cand.splitlines()
-                    if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
-                ]
-                score = len(diff_lines)
-                valid_candidates.append((score, cand))
+            applies_struct, parses, scope_ok = validate_patch(cand, code_snippet)
+            if applies_struct and parses and scope_ok:
+                apply_ok, _, apply_log = apply_diff_to_content(file_path, code_snippet, cand)
+                if apply_ok:
+                    diff_lines = [
+                        line for line in cand.splitlines()
+                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+                    ]
+                    score = len(diff_lines)
+                    valid_candidates.append((score, cand))
+                else:
+                    logger.debug("Candidate rejected by real git apply: %s", apply_log)
 
     if valid_candidates:
         valid_candidates.sort(key=lambda x: x[0])

@@ -54,13 +54,21 @@ async def run_benchmark():
         print("Error: No benchmark fixtures found.")
         sys.exit(1)
 
+    import argparse
+    import asyncio
+    parser = argparse.ArgumentParser(description="Run Telex breaking change benchmarks")
+    parser.add_argument("--live", action="store_true", help="Evaluate live LLM patch provider instead of ground truth")
+    args, _ = parser.parse_known_args()
+
+    mode_str = "Live LLM Provider Generation" if args.live else "Ground-Truth Verification / Self-Check Mode"
+
     print("=" * 78)
     print("TELEX AUTONOMOUS REPAIR QUALITY BENCHMARK (PHASE 5)")
     print("=" * 78)
+    print(f"Mode: {mode_str}")
     print(f"Evaluating {len(fixture_dirs)} real breaking change benchmarks across npm & PyPI...\n")
 
     results = []
-    has_live_key = bool(os.environ.get("GEMINI_API_KEY") and not os.environ.get("GEMINI_API_KEY", "").startswith("sk-fake"))
 
     for f_dir in fixture_dirs:
         name = f_dir.name
@@ -93,8 +101,23 @@ async def run_benchmark():
         expected_code = after_file.read_text(encoding="utf-8")
         rel_path = f"src/index{ext}" if ecosystem == "npm" else f"app/main{ext}"
 
-        # Generate ground-truth diff or live provider diff
-        patch_diff = generate_unified_diff(rel_path, before_code, expected_code)
+        # Generate candidate diff (via live provider or ground-truth)
+        if args.live:
+            try:
+                from services.patch_providers import get_patch_provider
+                provider = get_patch_provider()
+                patch_diff = asyncio.run(provider.generate_patch(
+                    old_api=name,
+                    new_api=name,
+                    code_snippet=before_code,
+                    context=f"Benchmark: {name}",
+                    defect_description=change_desc,
+                ))
+            except Exception as exc:
+                print(f"[{name}] Live provider failed ({exc}), falling back to ground truth.")
+                patch_diff = generate_unified_diff(rel_path, before_code, expected_code)
+        else:
+            patch_diff = generate_unified_diff(rel_path, before_code, expected_code)
 
         # 1. Cheap checks validation
         applies_cleanly, parses, scope_ok = validate_patch(patch_diff, before_code)

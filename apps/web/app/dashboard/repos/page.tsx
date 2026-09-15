@@ -11,6 +11,7 @@ export default function ReposPage() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [toggleErrors, setToggleErrors] = useState<Record<string, string>>({});
 
   const githubInstallUrl = `https://github.com/apps/${
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "telex-agent-dev"
@@ -47,6 +48,13 @@ export default function ReposPage() {
     const newValue = !currentValue;
     setUpdatingId(`${repoId}-${field}`);
 
+    // Clear previous error on retry
+    setToggleErrors((prev) => {
+      const next = { ...prev };
+      delete next[repoId];
+      return next;
+    });
+
     // Optimistic update
     setRepos((prev) =>
       prev.map((r) => (r.id === repoId ? { ...r, [field]: newValue } : r))
@@ -55,11 +63,15 @@ export default function ReposPage() {
     try {
       const { updateRepoSettings } = await import("@/lib/api");
       await updateRepoSettings(repoId, { [field]: newValue });
-    } catch {
-      // Revert on error
+    } catch (err: any) {
+      // Revert on error and surface message
       setRepos((prev) =>
         prev.map((r) => (r.id === repoId ? { ...r, [field]: currentValue } : r))
       );
+      setToggleErrors((prev) => ({
+        ...prev,
+        [repoId]: err?.message || "Failed to persist policy change. Check API authentication.",
+      }));
     } finally {
       setUpdatingId(null);
     }
@@ -210,6 +222,13 @@ export default function ReposPage() {
                       </Link>
                     </div>
                   </div>
+
+                  {/* Toggle Error Banner if mutation rejected */}
+                  {toggleErrors[repo.id] && (
+                    <div className="p-2.5 rounded-lg bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-xs flex items-center justify-between">
+                      <span>{toggleErrors[repo.id]}</span>
+                    </div>
+                  )}
 
                   {/* Quality Gate Policy Toggles */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-white/[0.06]">

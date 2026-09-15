@@ -247,7 +247,13 @@ async def run(payload: dict) -> None:
             # 9. Gating policy per Section 4.2
             fails_test_req = repo_requires_tests and (tests_pass is not True)
             fails_typecheck_req = repo_requires_typecheck and (typechecks is not True)
-            run_failed = not all_passed and bool(result.get("completed"))
+            is_workflow_success = (
+                bool(result.get("workflow_found"))
+                and bool(result.get("completed"))
+                and result.get("conclusion") == "success"
+                and all_passed
+            )
+            run_failed = not is_workflow_success
 
             if fails_test_req or fails_typecheck_req or run_failed:
                 patch.verified = False

@@ -98,16 +98,23 @@ async def get_activity(session: AsyncSession = Depends(get_session)):
         .limit(20)
     )
     patch_res = await session.execute(patch_stmt)
-    for patch_row, cu_row, repo_row in patch_res.all():
+    patch_rows = patch_res.all()
+
+    vr_map = {}
+    if patch_rows:
+        patch_ids = [p.id for p, _, _ in patch_rows]
         vr_stmt = (
             select(ValidationRun)
-            .where(ValidationRun.patch_id == patch_row.id)
+            .where(ValidationRun.patch_id.in_(patch_ids))
             .order_by(ValidationRun.created_at.desc())
-            .limit(1)
         )
         vr_res = await session.execute(vr_stmt)
-        vr = vr_res.scalar_one_or_none()
+        for vr in vr_res.scalars().all():
+            if vr.patch_id not in vr_map:
+                vr_map[vr.patch_id] = vr
 
+    for patch_row, cu_row, repo_row in patch_rows:
+        vr = vr_map.get(patch_row.id)
         activities.append({
             "id": f"patch-{patch_row.id}",
             "type": "patch",
@@ -118,6 +125,27 @@ async def get_activity(session: AsyncSession = Depends(get_session)):
             "verification_mode": vr.verification_mode if vr else "structural_only",
             "timestamp": patch_row.created_at.isoformat() if patch_row.created_at else None,
             "url": None,
+        })
+
+    # 3. Detected Changes
+    dc_stmt = (
+        select(DetectedChange, CodeUsage, Repo)
+        .join(CodeUsage, CodeUsage.detected_change_id == DetectedChange.id)
+        .join(Repo, CodeUsage.repo_id == Repo.id)
+        .order_by(DetectedChange.created_at.desc())
+        .limit(20)
+    )
+    dc_res = await session.execute(dc_stmt)
+    for dc_row, cu_row, repo_row in dc_res.all():
+        activities.append({
+            "id": f"change-{dc_row.id}",
+            "type": "detected_change",
+            "repo_name": repo_row.full_name,
+            "title": f"{dc_row.symbol_old} ({dc_row.change_type})",
+            "description": dc_row.description,
+            "status": cu_row.status,
+            "url": None,
+            "timestamp": dc_row.created_at.isoformat() if dc_row.created_at else None,
         })
 
     # Sort all activities by timestamp descending
