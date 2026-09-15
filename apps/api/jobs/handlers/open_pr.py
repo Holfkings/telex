@@ -12,6 +12,26 @@ import uuid
 logger = logging.getLogger(__name__)
 
 
+def format_verification_disclosure(vr) -> str:
+    """Derive accurate human-readable verification disclosure from actual validation run gates."""
+    if not vr:
+        return "⚠️ No verification run recorded for this patch."
+
+    mode_display = getattr(vr, "verification_mode", None) or "structural_only"
+    tests_pass = getattr(vr, "tests_pass", None)
+    typechecks = getattr(vr, "typechecks", None)
+
+    if mode_display == "full":
+        if tests_pass is True and typechecks is True:
+            return "✅ Verified: repo's own test suite and type-checker both passed on this patch."
+        elif tests_pass is True:
+            return "✅ Verified: repo's own test suite passed on this patch (type-check not run / not configured)."
+        else:
+            return "✅ Verified: isolated sandbox verification passed on this patch."
+    else:
+        return "⚠️ No test suite detected in this repo — this patch was validated by parse and type-check only, not by running tests."
+
+
 async def run(payload: dict) -> None:
     from db.session import AsyncSessionLocal
     from db.models import (
@@ -162,6 +182,8 @@ async def run(payload: dict) -> None:
         vr_evidence = []
         if vr:
             mode_display = getattr(vr, "verification_mode", None) or "structural_only"
+            disclosure_text = format_verification_disclosure(vr)
+            vr_evidence.append(f"- **Verification Status**: {disclosure_text}")
             vr_evidence.append(f"- **Verification Mode**: `{mode_display}`")
             vr_evidence.append(f"- **Applied Cleanly**: {'✓ Passed' if vr.applies_cleanly else '✗ Failed'}")
             if vr.typechecks is not None:

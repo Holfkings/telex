@@ -17,6 +17,7 @@ from jobs.handlers import (
     extract_changes,
     scan_repo,
     generate_patch,
+    validate_patch,
     open_pr,
 )
 
@@ -32,6 +33,7 @@ JOB_HANDLERS = {
     "extract_changes": extract_changes.run,
     "scan_repo": scan_repo.run,
     "generate_patch": generate_patch.run,
+    "validate_patch": validate_patch.run,
     "open_pr": open_pr.run,
 }
 

@@ -1,0 +1,2 @@
+Deprecation migration in Pydantic v2.0:
+BaseModel.dict() was deprecated in favor of BaseModel.model_dump(); callers must use model_dump() for compatibility and serialization performance.

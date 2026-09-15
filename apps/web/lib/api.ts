@@ -35,11 +35,21 @@ async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ── Stats ──────────────────────────────────────────────────────────────────
 
+export interface DetectedChangeSummary {
+  id: string;
+  symbol_old: string;
+  symbol_new?: string | null;
+  change_type: string;
+  description: string;
+  created_at: string;
+}
+
 export interface Stats {
   repos_watched: number;
   prs_opened: number;
   patches_generated: number;
   merge_rate: number;
+  recent_changes?: DetectedChangeSummary[];
 }
 
 export const getStats = () => apiFetch<Stats>("/api/stats");
@@ -64,6 +74,8 @@ export interface Repo {
   description?: string;
   default_branch: string;
   is_active: boolean;
+  requires_tests?: boolean;
+  requires_typecheck?: boolean;
   created_at: string;
   github_url: string;
   languages?: string[];
@@ -106,6 +118,35 @@ export const toggleRepo = (id: string, is_active: boolean) =>
     body: JSON.stringify({ is_active }),
   });
 
+export const updateRepoSettings = (
+  id: string,
+  settings: { requires_tests?: boolean; requires_typecheck?: boolean; is_active?: boolean }
+) =>
+  apiFetch<{ id: string; full_name: string; requires_tests: boolean; requires_typecheck: boolean; is_active: boolean }>(
+    `/api/repos/${id}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(settings),
+    }
+  );
+
+// ── Activity ───────────────────────────────────────────────────────────────
+
+export interface ActivityItem {
+  id: string;
+  type: "pull_request" | "patch" | "detected_change";
+  repo_name: string;
+  title: string;
+  description: string;
+  status: string;
+  url?: string | null;
+  timestamp?: string | null;
+  merged?: boolean;
+  verification_mode?: string | null;
+}
+
+export const getActivity = () => apiFetch<{ activities: ActivityItem[] }>("/api/activity");
+
 // ── Patches ────────────────────────────────────────────────────────────────
 
 export interface PatchSummary {
@@ -113,10 +154,16 @@ export interface PatchSummary {
   package: string;
   old_version: string;
   new_version: string;
-  status: "open" | "merged" | "closed" | "pending" | "patched" | "failed";
+  status: "open" | "merged" | "closed" | "pending" | "patched" | "failed" | "verified" | "generated";
   pr_url?: string;
   usages_patched: number;
   opened_at: string;
+  diff?: string | null;
+  verification_mode?: string | null;
+  tests_passed?: boolean | null;
+  typecheck_passed?: boolean | null;
+  change_type?: string | null;
+  change_description?: string | null;
 }
 
 export interface RepoPatches {

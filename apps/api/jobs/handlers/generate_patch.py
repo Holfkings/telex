@@ -326,55 +326,76 @@ async def run(payload: dict) -> None:
         observed_evidence = ""
 
 
-    # ── Phase 2: call provider and verify with 1-retry fallback ────────────────
+    # ── Phase 2: call provider for Best-of-N candidate diffs (Section 5.2) ────
     provider = get_patch_provider()
     provider_name = settings.llm_provider_default
     model_name = provider.model_name
 
-    diff = await provider.generate_patch(
-        old_api=old_api,
-        new_api=new_api,
-        code_snippet=code_snippet,
-        context=context,
-        defect_description=defect_description,
-        observed_evidence=observed_evidence,
-    )
+    # Request candidate diffs
+    candidates = []
+    if hasattr(provider, "generate_patch_candidates"):
+        try:
+            cand_res = await provider.generate_patch_candidates(
+                old_api=old_api,
+                new_api=new_api,
+                code_snippet=code_snippet,
+                context=context,
+                defect_description=defect_description,
+                observed_evidence=observed_evidence,
+                n=3,
+            )
+            if isinstance(cand_res, list) and cand_res:
+                candidates = cand_res
+        except (NotImplementedError, TypeError) as exc:
+            logger.debug("Provider generate_patch_candidates not usable: %s", exc)
 
-    v_result = await verify_patch_via_github(
-        repo_full_name=repo_full_name,
-        default_branch=repo_default_branch,
-        installation_github_id=installation_github_id,
-        diff=diff,
-        code_snippet=code_snippet,
-        file_path=file_path,
-        requires_tests=repo_requires_tests,
-        requires_typecheck=repo_requires_typecheck,
-    )
-
-    # If verification failed and diff was not an explicit refusal, retry ONCE with error context
-    if not v_result["is_verified"] and diff != "UNABLE_TO_PATCH" and v_result["verification_mode"] in ("github_actions", "git_apply_failed", "git_apply_clean"):
-        logger.info("generate_patch: first attempt failed verification (%s) — retrying once with error feedback", v_result["log"])
-        retry_context = f"{context}\n\nIMPORTANT: Your previous patch attempt failed verification with error:\n{v_result['log']}\nPlease generate a corrected minimal unified diff."
-        diff = await provider.generate_patch(
+    if not candidates:
+        single_diff = await provider.generate_patch(
             old_api=old_api,
             new_api=new_api,
             code_snippet=code_snippet,
-            context=retry_context,
+            context=context,
             defect_description=defect_description,
             observed_evidence=observed_evidence,
         )
-        v_result = await verify_patch_via_github(
-            repo_full_name=repo_full_name,
-            default_branch=repo_default_branch,
-            installation_github_id=installation_github_id,
-            diff=diff,
-            code_snippet=code_snippet,
-            file_path=file_path,
-            requires_tests=repo_requires_tests,
-            requires_typecheck=repo_requires_typecheck,
-        )
+        candidates = [single_diff]
 
-    # ── Phase 3: write results in transaction ──────────────────────────────────
+    # Cheap checks filter + real micro-apply verification
+    # Picks the "best" surviving candidate:
+    # 1. Must pass structural checks (valid hunk format, parseable, scope_ok)
+    # 2. Must apply cleanly to the actual code content via micro git apply
+    # 3. Heuristic: Smallest diff (fewest modified lines)
+    from services.github_service import apply_diff_to_content
+
+    valid_candidates = []
+    for cand in candidates:
+        if cand and cand != "UNABLE_TO_PATCH":
+            applies_struct, parses, scope_ok = validate_patch(cand, code_snippet)
+            if applies_struct and parses and scope_ok:
+                apply_ok, _, apply_log = apply_diff_to_content(file_path, code_snippet, cand)
+                if apply_ok:
+                    diff_lines = [
+                        line for line in cand.splitlines()
+                        if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+                    ]
+                    score = len(diff_lines)
+                    valid_candidates.append((score, cand))
+                else:
+                    logger.debug("Candidate rejected by real git apply: %s", apply_log)
+
+    if valid_candidates:
+        valid_candidates.sort(key=lambda x: x[0])
+        diff = valid_candidates[0][1]
+        logger.info(
+            "generate_patch: Best-of-N selected candidate with %d modified lines out of %d passing candidates",
+            valid_candidates[0][0],
+            len(valid_candidates),
+        )
+    else:
+        diff = "UNABLE_TO_PATCH"
+        logger.warning("generate_patch: all %d candidate diffs failed cheap checks", len(candidates))
+
+    # ── Phase 3: write results in transaction and hand off to validate_patch ──
     async with AsyncSessionLocal() as session:
         cu = await session.get(CodeUsage, code_usage_id)
         if cu is None:
@@ -386,57 +407,29 @@ async def run(payload: dict) -> None:
             logger.warning("generate_patch: provider returned UNABLE_TO_PATCH for usage %s", code_usage_id)
             return
 
-        is_verified = v_result["is_verified"]
-
         patch = Patch(
             code_usage_id=code_usage_id,
             diff=diff,
             llm_provider=provider_name,
             llm_model=model_name,
             prompt_version="v1",
-            verified=is_verified,
+            verified=False,
         )
         session.add(patch)
         await session.flush()
 
-        vr = ValidationRun(
-            patch_id=patch.id,
-            verification_mode=v_result["verification_mode"],
-            applies_cleanly=v_result["applies_cleanly"],
-            parses=v_result["parses"],
-            typechecks=v_result["typechecks"],
-            tests_pass=v_result["tests_pass"],
-            scope_ok=v_result["scope_ok"],
-            log=v_result["log"],
+        from jobs.queue import enqueue_job
+        await enqueue_job(
+            session,
+            job_type="validate_patch",
+            payload={"patch_id": str(patch.id)},
         )
-        session.add(vr)
-
-        if is_verified:
-            cu.status = "patched"
-            if payload.get("repo_id"):
-                from jobs.queue import enqueue_job
-                await enqueue_job(
-                    session,
-                    job_type="open_pr",
-                    payload={
-                        "repo_id": payload["repo_id"],
-                        "code_usage_id": str(code_usage_id),
-                    },
-                )
-        else:
-            cu.status = "failed"
-
         await session.commit()
 
     logger.info(
-        "generate_patch: %s for usage %s (verified=%s, mode=%s, applies=%s, tsc=%s, tests=%s)",
+        "generate_patch: created candidate patch %s via %s, enqueued validate_patch",
+        patch.id,
         provider_name,
-        code_usage_id,
-        is_verified,
-        v_result["verification_mode"],
-        v_result["applies_cleanly"],
-        v_result["typechecks"],
-        v_result["tests_pass"],
     )
 
 

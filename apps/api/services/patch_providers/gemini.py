@@ -140,6 +140,30 @@ class GeminiProvider(PatchProvider):
             logger.error("GeminiProvider.generate_patch failed after retries: %s", exc)
             raise
 
+    async def generate_patch_candidates(
+        self,
+        old_api: str,
+        new_api: str,
+        code_snippet: str,
+        context: str,
+        defect_description: str = "",
+        observed_evidence: str = "",
+        n: int = 3,
+    ) -> list[str]:
+        """Generate N candidate diffs for Best-of-N selection."""
+        candidates = []
+        for _ in range(n):
+            diff = await self.generate_patch(
+                old_api=old_api,
+                new_api=new_api,
+                code_snippet=code_snippet,
+                context=context,
+                defect_description=defect_description,
+                observed_evidence=observed_evidence,
+            )
+            candidates.append(diff)
+        return candidates
+
     async def classify_failure(
         self,
         failure_type: str,

@@ -1,0 +1,3 @@
+Breaking change in pytest v7.0.0:
+pytest.warns(None) was deprecated and removed.
+Use warnings.catch_warnings() to assert no warnings are raised.

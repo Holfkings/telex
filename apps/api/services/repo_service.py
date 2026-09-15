@@ -275,6 +275,8 @@ async def get_core_repositories_async() -> list[dict]:
                         "description": meta.get("description") or f"Autonomous codebase tracked by Telex Engine ({', '.join(meta['languages'])}).",
                         "default_branch": r.default_branch or "main",
                         "is_active": r.is_active,
+                        "requires_tests": bool(r.requires_tests),
+                        "requires_typecheck": bool(r.requires_typecheck),
                         "created_at": r.created_at,
                         "github_url": f"https://github.com/{r.full_name}",
                         "languages": meta.get("languages") or ["TypeScript"],

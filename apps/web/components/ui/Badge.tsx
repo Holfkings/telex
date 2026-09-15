@@ -1,24 +1,28 @@
 interface BadgeProps {
-  status: "open" | "merged" | "closed" | "pending" | "patched" | "failed";
+  status: "open" | "merged" | "closed" | "pending" | "patched" | "failed" | "verified" | "generated";
   className?: string;
 }
 
 const styleMap: Record<string, string> = {
-  open:    "border-white/30 text-white bg-white/[0.06]",
-  pending: "border-white/30 text-white bg-white/[0.06]",
-  merged:  "border-white/50 text-white bg-white/[0.12]",
-  patched: "border-white/50 text-white bg-white/[0.12]",
-  closed:  "border-white/10 text-[#888888] bg-white/[0.02]",
-  failed:  "border-white/20 text-[#888888] bg-white/[0.04]",
+  open:      "border-white/30 text-white bg-white/[0.06]",
+  pending:   "border-white/30 text-white bg-white/[0.06]",
+  merged:    "border-white/50 text-white bg-white/[0.12]",
+  patched:   "border-white/50 text-white bg-white/[0.12]",
+  verified:  "border-white/50 text-white bg-white/[0.15]",
+  generated: "border-white/25 text-white/80 bg-white/[0.05]",
+  closed:    "border-white/10 text-[#888888] bg-white/[0.02]",
+  failed:    "border-white/20 text-[#888888] bg-white/[0.04]",
 };
 
 const labelMap: Record<string, string> = {
-  open:    "OPEN",
-  pending: "PENDING",
-  merged:  "MERGED",
-  patched: "PATCHED",
-  closed:  "CLOSED",
-  failed:  "FAILED",
+  open:      "OPEN",
+  pending:   "PENDING",
+  merged:    "MERGED",
+  patched:   "PATCHED",
+  verified:  "VERIFIED",
+  generated: "GENERATED",
+  closed:    "CLOSED",
+  failed:    "FAILED",
 };
 
 export default function Badge({ status, className = "" }: BadgeProps) {

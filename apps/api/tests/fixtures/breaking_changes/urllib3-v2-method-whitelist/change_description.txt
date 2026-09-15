@@ -1,0 +1,3 @@
+Breaking change in urllib3 v2.0.0:
+Retry(method_whitelist=...) was removed in favor of Retry(allowed_methods=...).
+Passing method_whitelist raises TypeError in urllib3 >= 2.0.

@@ -228,6 +228,8 @@ class PullRequest(Base):
     patch_ids: Mapped[list] = mapped_column(ARRAY(UUID(as_uuid=True)), nullable=False, default=list)
     opened_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), server_default=func.now(), nullable=False)
     closed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    merged: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    merged_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
     repo: Mapped["Repo"] = relationship(back_populates="pull_requests")
     package_version: Mapped["PackageVersion"] = relationship(back_populates="pull_requests")
@@ -239,7 +241,7 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         CheckConstraint(
-            "job_type IN ('poll_registry', 'extract_changes', 'scan_repo', 'generate_patch', 'open_pr')",
+            "job_type IN ('poll_registry', 'extract_changes', 'scan_repo', 'generate_patch', 'validate_patch', 'open_pr')",
             name="ck_jobs_type",
         ),
         CheckConstraint(

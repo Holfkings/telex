@@ -1,0 +1,2 @@
+Breaking change in jsonwebtoken v9.0.0:
+jwt.verify rejects unsigned 'none' tokens and requires an explicit algorithms allowlist (e.g. HS256, HS384, HS512) to prevent algorithm confusion attacks when verifying HMAC signatures.

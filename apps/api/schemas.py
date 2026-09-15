@@ -40,6 +40,8 @@ class RepoOut(BaseModel):
     description: Optional[str] = None
     default_branch: str = "main"
     is_active: bool = True
+    requires_tests: bool = False
+    requires_typecheck: bool = False
     created_at: datetime
     github_url: str
     languages: list[str] = []
@@ -49,6 +51,12 @@ class RepoOut(BaseModel):
     dependencies: list[str] = []
 
     model_config = {"from_attributes": True}
+
+
+class RepoUpdateIn(BaseModel):
+    requires_tests: Optional[bool] = None
+    requires_typecheck: Optional[bool] = None
+    is_active: Optional[bool] = None
 
 
 class RepoDetailOut(RepoOut):
@@ -81,9 +89,15 @@ class PatchOut(BaseModel):
     old_version: str
     new_version: str
     status: str
-    pr_url: Optional[str]
-    usages_patched: int
+    pr_url: Optional[str] = None
+    usages_patched: int = 1
     opened_at: datetime
+    diff: Optional[str] = None
+    verification_mode: Optional[str] = None
+    tests_passed: Optional[bool] = None
+    typecheck_passed: Optional[bool] = None
+    change_type: Optional[str] = None
+    change_description: Optional[str] = None
 
 
 class RepoPatchesOut(BaseModel):
@@ -93,11 +107,21 @@ class RepoPatchesOut(BaseModel):
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 
+class DetectedChangeSummary(BaseModel):
+    id: str
+    symbol_old: str
+    symbol_new: Optional[str] = None
+    change_type: str
+    description: str
+    created_at: datetime
+
+
 class StatsOut(BaseModel):
     repos_watched: int
     prs_opened: int
     patches_generated: int
     merge_rate: float  # fraction 0.0–1.0
+    recent_changes: list[DetectedChangeSummary] = []
 
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
