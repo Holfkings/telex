@@ -38,15 +38,59 @@ def get_installation_token(installation_id: int) -> str:
     return integration.get_access_token(installation_id).token
 
 
+
+def check_rate_limit_and_wait(gh) -> None:
+    """
+    Phase 8.2: Check the current GitHub API rate-limit state and sleep
+    until the reset window if fewer than 50 requests remain.
+
+    This runs in a thread (all PyGithub calls are blocking). Raises
+    RuntimeError if rate limit info is unavailable (treat as transient,
+    let the worker retry mechanism handle it) — propagates to the worker's
+    exponential-backoff retry path.
+    """
+    import time
+    try:
+        rl = gh.get_rate_limit()
+        core = rl.core
+        remaining = core.remaining
+        reset_at = core.reset  # datetime UTC
+    except Exception as exc:
+        # Fail open on rate-limit read errors is dangerous; treat as transient
+        # and raise so the worker re-queues the job with exponential backoff.
+        raise RuntimeError("GitHub rate limit information unavailable") from exc
+
+    if remaining < 50:
+        now_ts = time.time()
+        reset_ts = reset_at.timestamp()
+        wait_secs = max(0, reset_ts - now_ts) + 5  # 5s buffer
+        logger.warning(
+            "GitHub rate limit low (%d remaining) — sleeping %.0fs until reset",
+            remaining, wait_secs,
+        )
+        time.sleep(min(wait_secs, 70))  # cap at 70s so the worker heartbeat stays alive
+        # Re-check; if still 0 raise so the job is re-queued via the retry mechanism
+        rl2 = gh.get_rate_limit()
+        if rl2.core.remaining == 0:
+            raise RuntimeError(
+                f"GitHub core rate limit exhausted — resets at {reset_at.isoformat()}"
+            )
+
+
 def get_installation_client(installation_id: int):
     """
     Return an authenticated PyGithub client scoped to a specific installation.
+
+    Phase 8.2: automatically calls check_rate_limit_and_wait before returning
+    so every caller gets the rate-limit gate without extra boilerplate.
     """
     if Github is None:
         raise RuntimeError("PyGithub not installed — run: pip install PyGithub")
 
     token = get_installation_token(installation_id)
-    return Github(token)
+    gh = Github(token)
+    check_rate_limit_and_wait(gh)
+    return gh
 
 
 async def open_patch_pr(
@@ -602,3 +646,54 @@ def verify_webhook_signature(payload: bytes, signature_header: Optional[str]) ->
     ).hexdigest()
 
     return hmac.compare_digest(f"sha256={expected}", signature_header)
+
+
+async def create_check_run(
+    repo_full_name: str,
+    installation_id: int,
+    head_sha: str,
+    name: str = "Telex Validation",
+    conclusion: str = "success",
+    title: str = "Telex patch verified",
+    summary: str = "",
+) -> bool:
+    """
+    Phase 8.4: Create a GitHub Check Run on the given commit SHA.
+
+    Appears alongside the repo's own CI checks in the PR interface.
+    conclusion must be one of: 'success' | 'failure' | 'neutral' | 'skipped'.
+
+    Returns True if the check run was created, False on error.
+    """
+    def _do_create() -> bool:
+        gh = get_installation_client(installation_id)
+        # PyGithub exposes create_check_run via get_repo().create_check_run()
+        repo = gh.get_repo(repo_full_name)
+        try:
+            repo.create_check_run(
+                name=name,
+                head_sha=head_sha,
+                status="completed",
+                conclusion=conclusion,
+                output={
+                    "title": title,
+                    "summary": summary or f"Telex validation {conclusion} for this patch.",
+                },
+            )
+            logger.info(
+                "create_check_run: created '%s' on %s (%s), conclusion=%s",
+                name, repo_full_name, head_sha[:8], conclusion,
+            )
+            return True
+        except Exception as exc:
+            logger.warning(
+                "create_check_run: failed for %s sha=%s: %s",
+                repo_full_name, head_sha[:8], exc,
+            )
+            return False
+
+    try:
+        return await asyncio.to_thread(_do_create)
+    except Exception as exc:
+        logger.warning("create_check_run: thread error: %s", exc)
+        return False

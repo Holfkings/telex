@@ -3,6 +3,7 @@ Telex FastAPI application entry point.
 """
 import asyncio
 import os
+import re
 import uuid
 from contextlib import asynccontextmanager
 import logging
@@ -11,13 +12,24 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from config import settings
-from routers import auth, repos, packages, webhooks, stats
+from routers import auth, repos, packages, webhooks, stats, settings as settings_router
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
 logger = logging.getLogger("telex.api")
+
+
+# ── Security: redact API key patterns from all log output ───────────────────
+from services.logging_utils import (
+    RedactingFormatter,
+    _KEY_PATTERN,
+    install_redacting_formatters,
+)
+
+install_redacting_formatters()
+# ───────────────────────────────────────────────────────────────────────
 
 
 @asynccontextmanager
@@ -73,6 +85,7 @@ app.include_router(repos.router)
 app.include_router(packages.router)
 app.include_router(webhooks.router)
 app.include_router(stats.router)
+app.include_router(settings_router.router)
 
 
 

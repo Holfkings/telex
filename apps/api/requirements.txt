@@ -15,8 +15,17 @@ anthropic>=0.36.0
 apscheduler>=3.10.4
 python-jose[cryptography]>=3.3.0
 httpx>=0.27.0
+cryptography>=42.0.0  # Fernet symmetric encryption for BYOK key storage (Phase 7)
 # Pinned to scanner-safe versions
 python-multipart>=0.0.30
+
+# ── BYOK provider SDKs (Phase 7) ─────────────────────────────────────────────
+# These are soft-required: the provider constructors raise an informative
+# RuntimeError on ImportError. Install all to support every provider option.
+openai>=1.30.0         # OpenAI, xAI, DeepSeek, Together, Nemotron (all use OpenAI-compat)
+mistralai>=1.0.0       # Mistral AI
+groq>=0.9.0            # Groq
+cohere>=5.0.0          # Cohere
 
 # Testing
 pytest>=8.0.0

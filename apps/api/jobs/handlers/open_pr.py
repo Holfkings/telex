@@ -38,7 +38,7 @@ async def run(payload: dict) -> None:
         Repo, PackageVersion, Package, DetectedChange,
         CodeUsage, Patch, PullRequest, Installation,
     )
-    from services.github_service import open_patch_pr, get_installation_client
+    from services.github_service import open_patch_pr, get_installation_client, create_check_run
     from sqlalchemy import select
 
     repo_id = uuid.UUID(payload["repo_id"])
@@ -218,6 +218,73 @@ async def run(payload: dict) -> None:
     except Exception as exc:
         logger.error("open_pr: failed to open PR: %s", exc)
         return
+
+    # ── Phase 8.4: create Telex Validation Check Run ──────────────────────────
+    # Determine the head commit SHA from the PR branch so the check run appears
+    # in the PR's "Checks" tab alongside the repo's own CI.
+    try:
+        import asyncio as _asyncio
+        def _get_head_sha():
+            gh = get_installation_client(installation_github_id)
+            repo_obj = gh.get_repo(repo_full_name)
+            branch_ref = repo_obj.get_branch(branch_name)
+            return branch_ref.commit.sha
+        head_sha = await _asyncio.to_thread(_get_head_sha)
+
+        # Aggregate validations for all included patches (Comment 7 fix)
+        has_failure = False
+        has_missing = False
+        summary_rows = []
+
+        for idx, pd in enumerate(patch_dicts, 1):
+            vr = pd.get("validation")
+            fpath = pd.get("file_path", f"patch #{idx}")
+            if vr is None:
+                has_missing = True
+                summary_rows.append(f"- `{fpath}`: no validation run recorded (neutral)")
+                continue
+
+            gate_passed = (
+                bool(vr.applies_cleanly)
+                and bool(vr.parses)
+                and bool(vr.scope_ok)
+                and (vr.tests_pass is not False)
+                and (vr.typechecks is not False)
+            )
+            if not gate_passed:
+                has_failure = True
+                summary_rows.append(
+                    f"- `{fpath}`: failed gate (applies={vr.applies_cleanly}, parses={vr.parses}, "
+                    f"scope={vr.scope_ok}, tests={vr.tests_pass}, types={vr.typechecks})"
+                )
+            else:
+                mode_lbl = getattr(vr, "verification_mode", None) or "structural_only"
+                summary_rows.append(f"- `{fpath}`: passed all gates (mode: `{mode_lbl}`)")
+
+        if has_failure:
+            check_conclusion = "failure"
+            check_title = "Telex: patch verification failed"
+        elif has_missing:
+            check_conclusion = "neutral"
+            check_title = "Telex: verification incomplete (missing validation run)"
+        else:
+            check_conclusion = "success"
+            check_title = f"Telex: all {len(patch_dicts)} patch(es) verified (all gates passed)"
+
+        check_summary = "\n".join(summary_rows)
+
+        await create_check_run(
+            repo_full_name=repo_full_name,
+            installation_id=installation_github_id,
+            head_sha=head_sha,
+            name="Telex Validation",
+            conclusion=check_conclusion,
+            title=check_title,
+            summary=check_summary,
+        )
+    except Exception as check_exc:
+        # Non-fatal — log and continue; the PR has already been opened
+        logger.warning("open_pr: could not create Check Run for PR #%d: %s", pr_number, check_exc)
 
     # Record the PR in the database
     async with AsyncSessionLocal() as session:
