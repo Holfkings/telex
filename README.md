@@ -1,181 +1,176 @@
-<p align="center">
-  <img src="apps/web/public/logo.svg" width="96" height="96" alt="Telex Logo" />
-</p>
+<div align="center">
+  <img src="apps/web/public/logo.svg" width="72" height="72" alt="Telex" />
+  <h1>Telex</h1>
+  <p><b>Autonomous dependency self-healing for production codebases.</b></p>
+  <p>
+    Watches npm &amp; PyPI · AST-scans affected repos · Generates LLM patches ·<br>
+    Verifies in ephemeral CI sandboxes · Opens human-reviewed pull requests.
+  </p>
 
-<h1 align="center">Telex</h1>
+  [![CI](https://github.com/Kesavaraja67/telex/actions/workflows/ci.yml/badge.svg)](https://github.com/Kesavaraja67/telex/actions/workflows/ci.yml)
+  [![Tests](https://img.shields.io/badge/tests-26%2F26-brightgreen?style=flat-square)](https://github.com/Kesavaraja67/telex/actions)
+  [![Phases](https://img.shields.io/badge/build-phases%200–9%20complete-blueviolet?style=flat-square)](ARCHITECTURE.md)
 
-<p align="center">
-  <strong>Autonomous Self-Healing Agent for Codebase Dependencies.</strong><br>
-  <em>Detect breaking dependency releases → AST-scan target repos (TS, JS, Python) → Synthesize minimal unified diffs via LLMs → Verify in native CI sandboxes → Open human-reviewed GitHub PRs.</em>
-</p>
-
-<p align="center">
-  <a href="ARCHITECTURE.md"><img src="https://img.shields.io/badge/Architecture-ARCHITECTURE.md-purple?style=flat-square" alt="Architecture" /></a>
-  <a href="DEMO.md"><img src="https://img.shields.io/badge/Reproduction_Guide-DEMO.md-blue?style=flat-square" alt="Demo Guide" /></a>
-  <img src="https://img.shields.io/badge/Tests-26%2F26_Passing-brightgreen?style=flat-square" alt="Tests 26 Passing" />
-  <img src="https://img.shields.io/badge/Phases-0--9_Complete-white?style=flat-square" alt="Phases 0-9 Complete" />
-</p>
+</div>
 
 ---
 
-## Overview
+## The problem
 
-Telex is an autonomous software healing daemon designed to protect production codebases from breaking upstream dependency updates. When an open-source package publishes a breaking version, Telex identifies affected call sites across your repositories, generates verified repair patches, and opens a ready-to-merge Pull Request before broken builds ever reach your users.
+When `axios@1.8.0` drops a breaking API change at 3 AM, your CI breaks in the morning, an engineer spends 2 hours on git-blame archaeology, and the fix is usually a 4-line change.
 
-```text
- ┌────────────────────────────────────────────────────────┐
- │                      TELEX ENGINE                      │
- └────────────────────────────────────────────────────────┘
-                             │
-            [ Trigger: Upstream Registry Release ]
-                    (npm, PyPI monitoring)
-                             │
-                      extract_changes
-            (Parse changelog & breaking symbols)
-                             │
-                        scan_repo
-             (Tree-Sitter AST Code Scanner)
-             (TypeScript, TSX, JS, Python)
-                             │
-                      generate_patch
-           (Best-of-N LLM: Gemini / Claude / OpenAI / …)
-                             │
-                     validate_patch
-                 (Native CI Verification Gate)
-                 (Typecheck & Test Suite Gates)
-                             │
-                          open_pr
-                (Human-Reviewed GitHub PR)
-                (+ Telex Validation Check Run)
+**Telex handles the 4-line change.** Before your engineers get to work.
+
+---
+
+## How it works
+
+```
+npm / PyPI registry
+       │
+       ▼  poll_registry  (every 15 min)
+Detect new version  ──→  extract_changes  (LLM parses breaking symbols from changelog)
+                                │
+                                ▼  scan_repo  (Tree-Sitter AST)
+                         Find affected call sites  ──→  TypeScript · TSX · JS · Python
+                                │
+                                ▼  generate_patch  (Best-of-3 LLM candidates)
+                         Structural check + real git apply → smallest passing diff
+                                │
+                                ▼  validate_patch  (ephemeral GitHub Actions sandbox)
+                         Repo's own test suite + typecheck gate
+                                │
+                                ▼  open_pr  (GitHub Pull Request + Check Run)
+                         Verification receipt in body  ·  "Telex Validation" check
+                         Never auto-merges — a human reviews and merges
 ```
 
----
-
-## Key Engineering Innovations
-
-### 1. Multi-Language Tree-Sitter AST Scanning
-Telex avoids naive grep or regex searches that produce false positives. It uses native **Tree-Sitter AST queries** across **TypeScript**, **TSX**, **JavaScript**, and **Python** to pinpoint exact call sites:
-- Plain function calls: `create_completion(...)`
-- Object method & attribute calls: `client.create_completion(...)`
-- Zero regex guessing: 100% AST-level syntax precision with line and byte offsets.
-
-### 2. Best-of-N Patch Synthesis + Ephemeral Verification Gates
-Telex never assumes an LLM-generated patch is correct:
-- **Best-of-N Generation**: Requests 3 candidate diffs, filters by structural validity and real `git apply` success, selects the smallest passing candidate.
-- **Sandbox Validation**: Every patch is verified in an isolated GitHub Actions sandbox using the repository's own test suite.
-- **Repository Verification Policies**: Enforces repository-configured typecheck (`npx tsc`, `mypy`) and test execution (`pytest`, `npm test`) gates.
-- **Honest Disclosure**: PR body explicitly states the verification mode (`full` / `structural_only`) — never hides the absence of a test suite.
-
-### 3. Absolute Safety: Never Auto-Merge
-- **Strict Human Review**: Telex opens pull requests with comprehensive verification receipts and exact diff disclosures. A human engineer always reviews and merges.
-- **Cryptographic Webhook Verification**: Inbound GitHub events are validated with HMAC-SHA256 (`X-Hub-Signature-256`).
-- **GitHub Check Runs**: A "Telex Validation" check run appears alongside the repo's own CI checks in every PR — clearly labeled, not replacing existing checks.
-
-### 4. BYOK API Keys & Security
-- **Bring Your Own Key**: Users can supply API keys for any of 10 supported providers (Gemini, OpenAI, Claude, Mistral, Groq, Cohere, xAI, DeepSeek, Together AI, Nemotron). Keys are encrypted at rest with Fernet symmetric encryption.
-- **Key Redaction**: A global log filter strips API key patterns from all log output before emission.
-- **Platform Fallback**: Users without a BYOK key automatically use the platform's hosted Gemini key — zero configuration required.
-
-### 5. Fair Multi-Tenant Scheduling
-- **Per-Installation Cap**: A simple concurrent-job cap (default 3) prevents any single high-volume installation from starving others.
-- **GitHub Rate-Limit Awareness**: The worker checks remaining API quota before heavy GitHub operations and sleeps until reset rather than hard-failing.
+Every stage is a Postgres-backed async job with `SELECT … FOR UPDATE SKIP LOCKED`, exponential backoff, heartbeat leases, and per-installation fairness caps.
 
 ---
 
-## Feature Matrix
+## What's different
 
-| Component | Feature | Implementation Details |
+| | Naive approach | Telex |
 |---|---|---|
-| **AST Scanner** | Multi-Language AST Parsing | Tree-sitter queries: TypeScript, TSX, JavaScript, Python |
-| **Patch Engine** | Best-of-N LLM Synthesis | Gemini, Claude, OpenAI, Mistral, Groq, Cohere, xAI, DeepSeek, Together, Nemotron |
-| **BYOK** | Per-User API Key Management | Fernet encryption at rest · `POST/GET/DELETE /api/settings/api-keys` |
-| **Verification Gate** | Sandboxed Verification | GitHub Actions ephemeral sandbox · typecheck + test suite gates |
-| **Check Runs** | GitHub Checks API | "Telex Validation" check run on every PR alongside native CI |
-| **GitHub App** | Autonomous PR Delivery | Atomic branch creation, patch commits, human-reviewed PRs |
-| **Job Queue** | Async PostgreSQL Worker | `SELECT … FOR UPDATE SKIP LOCKED` + per-installation cap |
-| **Auth & Session** | Secure GitHub OAuth | Cross-origin `/api/auth/me` with HMAC webhook validation |
-| **Dashboard** | Next.js Web App | Repo management, BYOK settings, telemetry, activity feed |
-| **CI & Testing** | Pytest + pip-audit + npm audit | 26/26 unit & integration tests · dependency scanning in CI |
+| **Change detection** | Grep changelogs | LLM-structured breaking symbol extraction |
+| **Usage search** | `grep -r 'symbol'` | Tree-Sitter AST — zero false positives from comments or strings |
+| **Patch quality** | Single LLM call | Best-of-3 candidates → `git apply` filter → smallest valid diff |
+| **Verification** | "runs locally" | Ephemeral sandbox running the **repo's own test suite** on the actual patch |
+| **PR transparency** | Generic "AI fix" | Explicit `verification_mode` + gate evidence in every PR body |
+| **Multi-tenancy** | Global FIFO | Per-installation cap — one high-volume org can't starve others |
+| **LLM provider** | One hardcoded key | BYOK for 10 providers · Fernet-encrypted at rest · Gemini fallback |
 
 ---
 
-## Quick Start & Local Setup
+## LLM Providers
 
-### Prerequisites
-- Python 3.11+
-- Node.js 20+
-- PostgreSQL 15+
-- A GitHub App (see [ARCHITECTURE.md](ARCHITECTURE.md) for setup)
+Telex ships with 10 provider implementations. Bring your own key in Settings — or use the platform's hosted Gemini with zero configuration.
 
-### 1. Clone & Configure Environment
+| Provider | Default model |
+|---|---|
+| Google Gemini *(platform default)* | `gemini-2.5-flash` |
+| OpenAI | `gpt-4o-mini` |
+| Anthropic Claude | `claude-sonnet-4-5` |
+| Mistral AI | `mistral-small-latest` |
+| Groq | `llama-3.3-70b-versatile` |
+| Cohere | `command-r-plus-08-2024` |
+| xAI Grok | `grok-3-mini` |
+| DeepSeek | `deepseek-chat` |
+| Together AI | `llama-3.3-70B-Instruct-Turbo` |
+| Nvidia Nemotron | `llama-3.1-nemotron-70b-instruct` |
+
+---
+
+## Security
+
+- **BYOK keys**: Fernet-encrypted at rest. Plaintext only in memory during the `POST /api/settings/api-keys` handler. Never stored, never logged, never returned after save.
+- **Log redaction**: Global filter on the root logger strips `sk-*`, `AIza*`, `sk-ant-*`, and 40+ character tokens from every log line before emission.
+- **Webhooks**: HMAC-SHA256 (`X-Hub-Signature-256`) verified before any payload processing.
+- **Sessions**: Cross-origin `/api/auth/me` with HttpOnly JWT cookies — no `document.cookie` cross-domain hacks.
+- **CI**: `pip-audit` (Python) + `npm audit` (Node) + Gitleaks secret scanning on every push and PR.
+- **No automerge**: At any confidence level. Ever. Not configurable. By design.
+
+---
+
+## Stack
+
+**Backend** — FastAPI · SQLAlchemy 2 async · PostgreSQL 15 · Alembic · APScheduler · PyGithub · Tree-Sitter 0.21 · cryptography (Fernet) · python-jose
+
+**Frontend** — Next.js 15 (App Router) · TypeScript strict · Vanilla CSS
+
+---
+
+## Local setup
+
 ```bash
+# Clone
 git clone https://github.com/Kesavaraja67/telex.git
 cd telex
+
+# Backend
 cp .env.example apps/api/.env
-# Edit apps/api/.env with your actual values (see .env.example for all fields)
-```
+# → fill in GITHUB_APP_ID, GITHUB_APP_PRIVATE_KEY, GEMINI_API_KEY, DATABASE_URL
 
-### 2. Generate Encryption Key (required for BYOK)
-```bash
+# Generate BYOK encryption key (required)
 python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
-# Add the output as TELEX_ENCRYPTION_KEY= in apps/api/.env
-```
+# → paste output as TELEX_ENCRYPTION_KEY in apps/api/.env
 
-### 3. Backend (FastAPI + Async Worker)
-```bash
 cd apps/api
-python -m venv venv
-# Windows:
-venv\Scripts\activate
-# Linux/macOS:
-source venv/bin/activate
-
+python -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 alembic upgrade head
-
-# Run API Server
 uvicorn main:app --reload --port 8000
-```
 
-### 4. Frontend (Next.js Dashboard)
-```bash
+# Frontend (separate terminal)
 cd apps/web
-npm install
-npm run dev
+npm install && npm run dev
+# → http://localhost:3000/dashboard
 ```
-Open [http://localhost:3000/dashboard](http://localhost:3000/dashboard).
 
 ---
 
-## Automated Test Suite (26 Tests)
+## Tests
 
 ```bash
-cd apps/api
-pytest -v
+cd apps/api && pytest -v
+# 26/26 passing
 ```
 
-**26/26 Passing** across:
-- `test_code_scanner.py` — 7 AST scanner tests (TS, TSX, JS, Python)
-- `test_patch_generation.py` — 11 patch synthesis and verification tests
-- `test_validate_patch.py` — 5 sandbox validation and disclosure tests
-- `test_webhooks.py` — 3 PR lifecycle webhook tests
+| Suite | Tests | Coverage |
+|---|---|---|
+| `test_code_scanner.py` | 7 | AST scanning across TS, TSX, JS, Python |
+| `test_patch_generation.py` | 11 | Best-of-N, micro-apply, sandbox gate |
+| `test_validate_patch.py` | 5 | Verification modes, disclosure, gating |
+| `test_webhooks.py` | 3 | PR merged / closed / reopened lifecycle |
 
 ---
 
-## Security Posture
+## Repository layout
 
-| Control | Status |
-|---|---|
-| Secret scanning (Gitleaks in CI) | ✅ Active |
-| Dependency scanning (`pip-audit` + `npm audit` in CI) | ✅ Active |
-| BYOK keys encrypted at rest (Fernet) | ✅ Active |
-| API key patterns redacted from all logs | ✅ Active |
-| HMAC-SHA256 webhook signature verification | ✅ Active |
-| Explicit CORS allowlist (no wildcard) | ✅ Active |
-| GitHub Actions workflow permissions: `contents: read` | ✅ Active |
-| No automerge, at any confidence level | ✅ By design |
+```
+apps/api/
+  alembic/versions/     9 migrations (schema history preserved)
+  db/models.py          User, Installation, Repo, Patch, ValidationRun, UserApiKey, …
+  jobs/handlers/        poll_registry · extract_changes · scan_repo · generate_patch · validate_patch · open_pr
+  jobs/queue.py         SKIP LOCKED + per-installation fairness cap
+  routers/              auth · repos · packages · webhooks · stats · settings (BYOK)
+  services/
+    code_scanner.py     Tree-Sitter AST (TS, TSX, JS, Python)
+    crypto.py           Fernet BYOK key encryption (single swappable _get_master_key)
+    github_service.py   GitHub App: branches · PRs · Check Runs · rate-limit backoff
+    patch_providers/    10 LLM implementations + BYOK-aware factory
+  tests/                26 tests + real breaking-change benchmark fixtures
 
-> **Note**: A formal third-party penetration test should be completed before describing this system as production-grade to external parties.
+apps/web/app/dashboard/
+  page.tsx              Telemetry overview
+  repos/                Repo list · policy toggles · per-repo change/patch/PR detail
+  settings/             BYOK key management (10 providers, live status)
+  activity/             Cross-repo reverse-chronological event feed
+```
 
-For step-by-step evaluator instructions, see [DEMO.md](DEMO.md).
-For architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md).
+---
+
+<div align="center">
+  <a href="ARCHITECTURE.md">Architecture</a> · <a href="DEMO.md">Evaluator Guide</a>
+</div>
