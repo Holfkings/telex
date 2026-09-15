@@ -3,12 +3,13 @@ Repos API — list live repositories, commit history, and Gemini 2.5 Flash archi
 """
 from fastapi import APIRouter, HTTPException, Depends
 from sqlalchemy import select, or_, cast, Text
+from datetime import datetime, timezone
 import uuid
 
 from db.session import AsyncSessionLocal
-from db.models import Repo, Patch, CodeUsage, PullRequest
+from db.models import Repo, Patch, CodeUsage, PullRequest, ValidationRun, DetectedChange
 from services.repo_service import get_core_repositories_async, explain_repo_with_gemini
-from schemas import RepoOut, RepoDetailOut, AIExplainOut, RepoToggleIn, RepoPatchesOut, PatchOut
+from schemas import RepoOut, RepoDetailOut, AIExplainOut, RepoToggleIn, RepoUpdateIn, RepoPatchesOut, PatchOut
 from routers.auth import require_auth
 
 router = APIRouter(prefix="/api/repos", tags=["repos"])
@@ -63,6 +64,38 @@ async def toggle_repo(repo_id: str, body: RepoToggleIn):
     return {"id": repo_id, "is_active": body.is_active}
 
 
+@router.patch("/{repo_id}", response_model=dict)
+async def update_repo_settings(repo_id: str, body: RepoUpdateIn):
+    """Update repo verification policy (requires_tests, requires_typecheck) or monitoring status."""
+    async with AsyncSessionLocal() as session:
+        stmt = select(Repo).where(
+            or_(
+                cast(Repo.id, Text) == repo_id,
+                Repo.full_name == repo_id,
+            )
+        ).limit(1)
+        result = await session.execute(stmt)
+        repo = result.scalar_one_or_none()
+        if not repo:
+            raise HTTPException(status_code=404, detail="Repo not found")
+
+        if body.requires_tests is not None:
+            repo.requires_tests = body.requires_tests
+        if body.requires_typecheck is not None:
+            repo.requires_typecheck = body.requires_typecheck
+        if body.is_active is not None:
+            repo.is_active = body.is_active
+
+        await session.commit()
+        return {
+            "id": str(repo.id),
+            "full_name": repo.full_name,
+            "requires_tests": repo.requires_tests,
+            "requires_typecheck": repo.requires_typecheck,
+            "is_active": repo.is_active,
+        }
+
+
 @router.get("/{repo_id}/patches", response_model=RepoPatchesOut)
 async def list_patches(repo_id: str):
     """Return recent patches for repository from real DB records (P1-8)."""
@@ -106,6 +139,23 @@ async def list_patches(repo_id: str):
                 )
                 pr_row = pr_res.scalar_one_or_none()
 
+                # Query latest validation run
+                vr_res = await session.execute(
+                    select(ValidationRun)
+                    .where(ValidationRun.patch_id == patch_row.id)
+                    .order_by(ValidationRun.created_at.desc())
+                    .limit(1)
+                )
+                vr_row = vr_res.scalar_one_or_none()
+
+                # Query detected change
+                dc_res = await session.execute(
+                    select(DetectedChange)
+                    .where(DetectedChange.id == cu_row.detected_change_id)
+                    .limit(1)
+                )
+                dc_row = dc_res.scalar_one_or_none()
+
                 patches_out.append(
                     PatchOut(
                         id=str(patch_row.id),
@@ -115,7 +165,13 @@ async def list_patches(repo_id: str):
                         status="verified" if patch_row.verified else "generated",
                         pr_url=pr_row.github_pr_url if pr_row else f"https://github.com/{repo_name}",
                         usages_patched=1,
-                        opened_at=patch_row.created_at.isoformat() if patch_row.created_at else "2026-08-30T00:00:00Z",
+                        opened_at=patch_row.created_at if patch_row.created_at else datetime.now(timezone.utc),
+                        diff=patch_row.diff,
+                        verification_mode=vr_row.verification_mode if vr_row else "structural_only",
+                        tests_passed=vr_row.tests_pass if vr_row else None,
+                        typecheck_passed=vr_row.typechecks if vr_row else None,
+                        change_type=dc_row.change_type if dc_row else None,
+                        change_description=dc_row.description if dc_row else None,
                     )
                 )
 

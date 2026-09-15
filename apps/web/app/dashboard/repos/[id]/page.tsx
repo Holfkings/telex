@@ -2,21 +2,12 @@
 
 import React, { useState, useEffect, use } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "motion/react";
+import { motion } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import BorderBeam from "@/components/ui/BorderBeam";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
-import Badge from "@/components/ui/Badge";
 import DiffViewer from "@/components/dashboard/DiffViewer";
-import type { RepoDetails, AIExplanation, RepoPatches } from "@/lib/api";
-
-const SAMPLE_DIFF = `--- a/src/services/payment.ts
-+++ b/src/services/payment.ts
-@@ -12,2 +12,2 @@
-- const client = new OpenAI({ apiKey: process.env.OPENAI_KEY });
-- const res = await client.createCompletion({ model: "text-davinci-003", prompt });
-+ const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-+ const res = await client.chat.completions.create({ model: "gpt-4o", messages: [{ role: "user", content: prompt }] });`;
+import type { RepoDetails, AIExplanation, PatchSummary } from "@/lib/api";
 
 export default function RepoDetailPage({
   params,
@@ -27,9 +18,12 @@ export default function RepoDetailPage({
   const repoId = resolvedParams.id;
 
   const [repo, setRepo] = useState<RepoDetails | null>(null);
+  const [patches, setPatches] = useState<PatchSummary[]>([]);
+  const [selectedPatchIndex, setSelectedPatchIndex] = useState<number>(0);
   const [aiExplanation, setAiExplanation] = useState<AIExplanation | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
 
   useEffect(() => {
@@ -39,20 +33,30 @@ export default function RepoDetailPage({
     async function loadData() {
       if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
       try {
-        const { getRepoDetails } = await import("@/lib/api");
-        const repoData = await getRepoDetails(repoId).catch(() => null);
+        const { getRepoDetails, getRepoPatches } = await import("@/lib/api");
+        const [repoData, patchesData] = await Promise.allSettled([
+          getRepoDetails(repoId),
+          getRepoPatches(repoId),
+        ]);
 
         if (!isMounted) return;
-        if (repoData) {
-          setRepo(repoData);
+
+        if (repoData.status === "fulfilled" && repoData.value) {
+          setRepo(repoData.value);
           setNotFound(false);
         } else {
           setNotFound(true);
+        }
+
+        if (patchesData.status === "fulfilled" && patchesData.value?.patches) {
+          setPatches(patchesData.value.patches);
         }
       } catch {
         if (isMounted) {
           setNotFound(true);
         }
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     }
 
@@ -92,45 +96,55 @@ export default function RepoDetailPage({
     }
   }
 
-  if (!repo) {
-    if (notFound) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-center">
-          <div className="font-mono text-sm text-white font-semibold">Repository not connected</div>
-          <div className="text-xs text-[#71717A] max-w-sm">
-            This repository is not registered with the Telex GitHub App or has been uninstalled.
-          </div>
-          <Link
-            href="/dashboard"
-            className="mt-2 text-xs font-mono px-3 py-1.5 rounded bg-white/10 text-white border border-white/15 hover:bg-white/20 transition-all"
-          >
-            ← Back to Fleet Overview
-          </Link>
-        </div>
-      );
-    }
-
+  // State 1: Loading
+  if (isLoading && !repo) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh] text-[#71717A] font-mono text-sm">
-        Loading repository telemetry…
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-center">
+        <CyberGridBackground />
+        <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin" />
+        <div className="text-xs font-mono text-[#71717A]">Loading repository telemetry…</div>
       </div>
     );
   }
 
+  // Not found
+  if (notFound || !repo) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-center">
+        <CyberGridBackground />
+        <div className="font-mono text-sm text-white font-semibold">Repository not connected</div>
+        <div className="text-xs text-[#71717A] max-w-sm">
+          This repository is not registered with the Telex GitHub App or has been uninstalled.
+        </div>
+        <Link
+          href="/dashboard/repos"
+          className="mt-2 text-xs font-mono px-3.5 py-1.5 rounded-lg bg-white/10 text-white border border-white/15 hover:bg-white/20 transition-all"
+        >
+          ← Back to Repositories
+        </Link>
+      </div>
+    );
+  }
+
+  const activePatch = patches[selectedPatchIndex] || null;
+
   return (
     <div className="flex flex-col gap-6 relative z-10 max-w-7xl mx-auto w-full">
-      {/* Background */}
       <CyberGridBackground />
 
-      {/* Clean Navigation Breadcrumb & Header */}
+      {/* Header & Navigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
         <div className="flex flex-col gap-1">
           <div className="flex items-center gap-2 font-mono text-xs text-[#71717A]">
             <Link href="/dashboard" className="hover:text-white transition-colors">
-              Fleet
+              Fleet Overview
             </Link>
             <span className="text-[#3F3F46]">/</span>
-            <span className="text-white font-medium">{repo.full_name}</span>
+            <Link href="/dashboard/repos" className="hover:text-white transition-colors">
+              Repositories
+            </Link>
+            <span className="text-[#3F3F46]">/</span>
+            <span className="text-white font-medium">{repo.name || repo.full_name}</span>
           </div>
 
           <div className="flex items-center gap-3">
@@ -142,28 +156,213 @@ export default function RepoDetailPage({
             </span>
           </div>
 
-          <p className="font-sans text-xs text-[#71717A] max-w-2xl">
-            {repo.description}
-          </p>
+          {repo.description && (
+            <p className="font-sans text-xs text-[#71717A] max-w-2xl">
+              {repo.description}
+            </p>
+          )}
         </div>
 
-        {/* GitHub link button */}
-        {repo.github_url && (
+        {/* GitHub Link & Policy Badge */}
+        <div className="flex items-center gap-2.5 self-start sm:self-center">
           <Link
-            href={repo.github_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="font-mono text-xs px-3.5 py-1.5 rounded-lg border border-white/15 bg-white/[0.04] text-white hover:bg-white hover:text-black transition-all flex items-center gap-1.5 self-start sm:self-center shadow-sm"
+            href="/dashboard/repos"
+            className="font-mono text-xs px-3 py-1.5 rounded-lg border border-white/15 bg-white/[0.04] text-[#A1A1AA] hover:text-white hover:border-white/30 transition-all"
           >
-            <span>GitHub Repository</span>
-            <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-            </svg>
+            Policy Settings
           </Link>
+
+          {repo.github_url && (
+            <Link
+              href={repo.github_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-mono text-xs px-3.5 py-1.5 rounded-lg bg-white text-black hover:bg-white/90 transition-all flex items-center gap-1.5 shadow-sm font-semibold"
+            >
+              <span>GitHub</span>
+              <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
+            </Link>
+          )}
+        </div>
+      </div>
+
+      {/* Section: Autonomous Breaking Changes & Patch Verification */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <h2 className="font-mono font-semibold text-sm text-white tracking-tight">
+              Detected Breaking Changes & Patches
+            </h2>
+            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-[#A1A1AA] border border-white/15">
+              {patches.length} detected
+            </span>
+          </div>
+        </div>
+
+        {/* State 2: Empty State for Patches */}
+        {patches.length === 0 ? (
+          <SpotlightCard
+            spotlightColor="rgba(255, 255, 255, 0.05)"
+            className="p-8 sm:p-10 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl flex flex-col items-center text-center gap-3"
+            enableTilt={false}
+          >
+            <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </div>
+            <div className="flex flex-col gap-1 max-w-md">
+              <h3 className="font-mono font-bold text-sm text-white">
+                No issues detected yet
+              </h3>
+              <p className="font-sans text-xs text-[#A1A1AA] leading-relaxed">
+                Telex checks this repo whenever a dependency you use ships a breaking change.
+              </p>
+            </div>
+          </SpotlightCard>
+        ) : (
+          /* State 3: Populated Patches + Live Validation Disclosure */
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* Left list: Patches */}
+            <div className="lg:col-span-4 flex flex-col gap-2">
+              {patches.map((patch, idx) => (
+                <button
+                  key={patch.id}
+                  onClick={() => setSelectedPatchIndex(idx)}
+                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer ${
+                    selectedPatchIndex === idx
+                      ? "bg-white/[0.08] border-white/30 shadow-md"
+                      : "bg-black/50 border-white/[0.08] hover:border-white/20"
+                  }`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-mono text-xs font-bold text-white truncate">
+                      {patch.package}
+                    </span>
+                    <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white border border-white/15 flex-shrink-0">
+                      {patch.status}
+                    </span>
+                  </div>
+
+                  {patch.change_description && (
+                    <p className="font-sans text-[11px] text-[#A1A1AA] line-clamp-2">
+                      {patch.change_description}
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] font-mono text-[10px] text-[#71717A]">
+                    <span>
+                      Mode:{" "}
+                      <span className="text-white/80">
+                        {patch.verification_mode === "full" ? "Full Sandbox" : "AST Structural"}
+                      </span>
+                    </span>
+                    <span>{new Date(patch.opened_at).toLocaleDateString()}</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            {/* Right details: Selected Patch Detail & Diff Viewer */}
+            <div className="lg:col-span-8 flex flex-col gap-3">
+              {activePatch && (
+                <SpotlightCard
+                  spotlightColor="rgba(255, 255, 255, 0.05)"
+                  className="p-4 sm:p-5 bg-black/70 backdrop-blur-xl border border-white/15 rounded-xl flex flex-col gap-4 shadow-lg"
+                  enableTilt={false}
+                >
+                  {/* Validation disclosure header */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-3 border-b border-white/[0.08]">
+                    <div className="flex flex-col gap-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-sm text-white">
+                          Patch for {activePatch.package}
+                        </span>
+                        {activePatch.change_type && (
+                          <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white uppercase border border-white/15">
+                            {activePatch.change_type}
+                          </span>
+                        )}
+                      </div>
+                      <span className="font-sans text-xs text-[#A1A1AA]">
+                        {activePatch.change_description || "Call-site automated AST rewrite"}
+                      </span>
+                    </div>
+
+                    {activePatch.pr_url && (
+                      <Link
+                        href={activePatch.pr_url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-mono text-xs font-semibold px-3 py-1.5 rounded-lg bg-white text-black hover:bg-white/90 transition-all flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
+                      >
+                        <span>Inspect Pull Request</span>
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+                      </Link>
+                    )}
+                  </div>
+
+                  {/* Verification Run Metrics */}
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 font-mono text-xs">
+                    <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
+                      <span className="text-[10px] text-[#71717A] uppercase">Verification Mode</span>
+                      <span className="font-bold text-white">
+                        {activePatch.verification_mode === "full" ? "Isolated Sandbox (CI)" : "Structural AST Only"}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
+                      <span className="text-[10px] text-[#71717A] uppercase">Test Suite Gate</span>
+                      <span className="font-bold text-white">
+                        {activePatch.tests_passed === true
+                          ? "✓ Passing (100%)"
+                          : activePatch.tests_passed === false
+                          ? "✗ Failed"
+                          : "— Bypassed / None"}
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
+                      <span className="text-[10px] text-[#71717A] uppercase">Typecheck Gate</span>
+                      <span className="font-bold text-white">
+                        {activePatch.typecheck_passed === true
+                          ? "✓ Passing"
+                          : activePatch.typecheck_passed === false
+                          ? "✗ Failed"
+                          : "— Bypassed / None"}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Diff Viewer */}
+                  {activePatch.diff ? (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="font-mono text-[11px] text-[#71717A] uppercase tracking-wider">
+                        Synthesized Unified Diff
+                      </span>
+                      <DiffViewer
+                        diff={activePatch.diff}
+                        filename={activePatch.package}
+                        animated={false}
+                      />
+                    </div>
+                  ) : (
+                    <div className="p-4 rounded-lg bg-white/[0.02] border border-white/10 text-center font-mono text-xs text-[#71717A]">
+                      Diff recorded in GitHub Pull Request.
+                    </div>
+                  )}
+                </SpotlightCard>
+              )}
+            </div>
+          </div>
         )}
       </div>
 
-      {/* Gemini 2.5 Flash AI Intelligence Console */}
+      {/* Gemini 2.5 Flash Architecture & Risk Radar */}
       <SpotlightCard
         spotlightColor="rgba(255, 255, 255, 0.08)"
         className="p-5 bg-black/70 backdrop-blur-xl border border-white/15 relative overflow-hidden flex flex-col gap-4 rounded-xl shadow-lg"
@@ -178,7 +377,7 @@ export default function RepoDetailPage({
             </div>
             <div>
               <h2 className="font-mono font-semibold text-sm text-white tracking-tight">
-                Gemini 2.5 Flash Architecture & Risk Radar
+                Gemini 2.5 Flash Architecture Radar
               </h2>
             </div>
           </div>
@@ -192,7 +391,7 @@ export default function RepoDetailPage({
               <span>Analyzing telemetry…</span>
             ) : (
               <>
-                <span>Run Gemini AI Analysis</span>
+                <span>Run Gemini Analysis</span>
                 <span>→</span>
               </>
             )}
@@ -236,76 +435,15 @@ export default function RepoDetailPage({
                 </span>
               </div>
             </div>
-
-            {aiExplanation.commit_insights.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                <span className="text-[#71717A] text-[10px] uppercase tracking-wider">
-                  Commit-Level Insights
-                </span>
-                <div className="flex flex-col gap-1.5">
-                  {aiExplanation.commit_insights.map((ins, i) => (
-                    <div
-                      key={i}
-                      className="p-2.5 rounded bg-black/50 border border-white/[0.04] flex items-center justify-between gap-3 text-xs"
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="bg-white/10 px-1.5 py-0.2 rounded text-white font-bold text-[11px]">
-                          {ins.hash}
-                        </span>
-                        <span className="text-white truncate text-xs">{ins.impact}</span>
-                      </div>
-                      <span className="font-bold text-[10px] px-1.5 py-0.2 rounded bg-white/10 text-white border border-white/20 flex-shrink-0">
-                        {ins.risk_level} RISK
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
           </motion.div>
         ) : !aiError ? (
           <div className="py-4 text-center text-[#71717A] font-mono text-xs relative z-10">
-            Click &quot;Run Gemini AI Analysis&quot; to synthesize live architectural risk insights.
+            Click &quot;Run Gemini Analysis&quot; to synthesize live architectural risk insights.
           </div>
         ) : null}
       </SpotlightCard>
 
-      {/* Streamlined Live Commit Timeline */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center justify-between">
-          <h2 className="font-mono font-semibold text-sm text-white tracking-tight">
-            Recent Commit Stream
-          </h2>
-          <span className="font-mono text-xs text-[#71717A]">
-            {repo.commits.length} recorded
-          </span>
-        </div>
-
-        <div className="flex flex-col gap-2">
-          {repo.commits.map((c, i) => (
-            <div
-              key={c.hash || i}
-              className="p-3.5 rounded-xl border border-white/[0.08] bg-black/60 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 hover:border-white/20 transition-colors"
-            >
-              <div className="flex items-center gap-3 min-w-0">
-                <span className="font-mono text-xs font-bold text-white bg-white/10 px-2 py-1 rounded border border-white/10">
-                  {c.short_hash}
-                </span>
-                <span className="font-sans text-xs text-white font-medium truncate">
-                  {c.message}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-[#71717A] font-mono flex-shrink-0 self-end sm:self-auto">
-                <span className="text-[#A1A1AA]">by {c.author}</span>
-                <span>•</span>
-                <span>{c.relative_time || c.date}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* Compact Dependencies & Verification Grid */}
+      {/* Commit Stream & Dependencies */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <SpotlightCard
           spotlightColor="rgba(255, 255, 255, 0.05)"
@@ -316,14 +454,20 @@ export default function RepoDetailPage({
             Tracked Dependencies
           </h3>
           <div className="flex flex-wrap gap-1.5">
-            {repo.dependencies?.map((dep) => (
-              <span
-                key={dep}
-                className="font-mono text-xs px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[#A1A1AA]"
-              >
-                {dep}
+            {repo.dependencies && repo.dependencies.length > 0 ? (
+              repo.dependencies.map((dep) => (
+                <span
+                  key={dep}
+                  className="font-mono text-xs px-2 py-0.5 rounded bg-white/5 border border-white/10 text-[#A1A1AA]"
+                >
+                  {dep}
+                </span>
+              ))
+            ) : (
+              <span className="font-mono text-xs text-[#71717A]">
+                Dependencies indexed via Tree-Sitter
               </span>
-            ))}
+            )}
           </div>
         </SpotlightCard>
 
@@ -333,31 +477,26 @@ export default function RepoDetailPage({
           enableTilt={false}
         >
           <h3 className="font-mono font-semibold text-xs text-white uppercase tracking-wider">
-            Verification Pipeline
+            Verification Engine
           </h3>
           <div className="font-mono text-xs text-[#A1A1AA] flex flex-col gap-1.5">
             <div className="flex items-center justify-between">
-              <span>AST Parser:</span>
-              <span className="text-white font-medium">Tree-sitter Ready</span>
+              <span>AST Scanner:</span>
+              <span className="text-white font-medium">Tree-Sitter Parity (TS/Py)</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Verification Sandbox:</span>
-              <span className="text-white font-medium">Isolated Pytest Runner</span>
+              <span>Candidate Generator:</span>
+              <span className="text-white font-medium">Best-of-3 MiniMax Ranking</span>
             </div>
             <div className="flex items-center justify-between">
-              <span>Status:</span>
-              <Badge status="patched" />
+              <span>Quality Gates:</span>
+              <span className="text-white font-medium">
+                {repo.requires_tests ? "Tests Required" : "Tests Optional"} •{" "}
+                {repo.requires_typecheck ? "Typecheck Required" : "Typecheck Optional"}
+              </span>
             </div>
           </div>
         </SpotlightCard>
-      </div>
-
-      {/* Verified Diff Inspection */}
-      <div className="flex flex-col gap-2 pt-2">
-        <h3 className="font-mono font-semibold text-xs text-[#71717A] uppercase tracking-wider">
-          Latest Verified Patch Diff (Example Reference)
-        </h3>
-        <DiffViewer diff={SAMPLE_DIFF} filename="services/payment_service.ts" animated={false} />
       </div>
     </div>
   );
