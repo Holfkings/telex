@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Nav from "@/components/marketing/Nav";
 import Hero from "@/components/marketing/Hero";
 import LiveMarquee from "@/components/marketing/LiveMarquee";
@@ -44,15 +45,27 @@ export default function LandingPage() {
               { label: "GITHUB", href: "https://github.com/Kesavaraja67/telex" },
               { label: "DASHBOARD", href: "/dashboard" },
               { label: "STATUS", href: "https://telex-api.onrender.com/health" },
-            ].map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="hover:text-white transition-colors"
-              >
-                {link.label}
-              </a>
-            ))}
+            ].map((link) =>
+              link.href.startsWith("/") ? (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className="hover:text-white transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  {link.label}
+                </a>
+              )
+            )}
           </div>
         </div>
       </footer>

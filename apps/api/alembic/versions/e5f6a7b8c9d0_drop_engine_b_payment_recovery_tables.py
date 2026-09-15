@@ -1,4 +1,4 @@
-﻿"""drop_engine_b_payment_recovery_tables
+"""drop_engine_b_payment_recovery_tables
 
 Revision ID: e5f6a7b8c9d0
 Revises: d4e5f6a7b8c9
@@ -29,8 +29,13 @@ def upgrade() -> None:
     op.drop_table("payment_attempts")
 
     # 3. Remove Engine B job types from the check constraint.
-    #    Postgres has no ALTER CONSTRAINT for check-constraint value lists;
-    #    must drop and recreate.
+    #    First clean up any existing rows with obsolete Engine B job types
+    #    so Postgres constraint validation passes cleanly.
+    op.execute(
+        "DELETE FROM jobs WHERE job_type IN ("
+        "'detect_payment_failure','diagnose_runtime_failure','recover_runtime'"
+        ")"
+    )
     op.drop_constraint("ck_jobs_type", "jobs", type_="check")
     op.create_check_constraint(
         "ck_jobs_type",

@@ -323,6 +323,7 @@ async def run(payload: dict) -> None:
         code_snippet = cu.snippet or ""
         file_path = cu.file_path
         context = f"File: {cu.file_path}\nLines {cu.line_start}–{cu.line_end}"
+        observed_evidence = ""
 
 
     # ── Phase 2: call provider and verify with 1-retry fallback ────────────────

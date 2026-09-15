@@ -61,7 +61,7 @@ const DEMO_TICKETS: TicketData[] = [
     package: "axios",
     oldVersion: "1.3.0",
     newVersion: "1.6.0",
-    diff: "-axios.defaults.baseURL = url;\n+axios.create({ baseURL: url });",
+    diff: "-axios.defaults.baseURL = url;\n+const api = axios.create({ baseURL: url });",
     timestamp: "2h ago",
     status: "open",
     usagesPatched: 2,

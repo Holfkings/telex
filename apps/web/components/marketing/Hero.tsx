@@ -97,7 +97,7 @@ export default function Hero() {
             />
 
             <IllocaButton
-              label="Recovery Pipeline ↓"
+              label="Healing Pipeline ↓"
               onClick={() => {
                 const el = document.getElementById("how-it-works");
                 el?.scrollIntoView({ behavior: "smooth" });
