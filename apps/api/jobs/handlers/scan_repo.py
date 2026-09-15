@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 MAX_FILE_BYTES = 500_000
 
 # Extensions to scan
-SCAN_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"}
+SCAN_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py"}
 
 
 async def run(payload: dict) -> None:
