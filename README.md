@@ -11,6 +11,9 @@
   [![Tests](https://img.shields.io/badge/tests-26%2F26-brightgreen?style=flat-square)](https://github.com/Kesavaraja67/telex/actions)
   [![Phases](https://img.shields.io/badge/build-phases%200–9%20complete-blueviolet?style=flat-square)](ARCHITECTURE.md)
 
+  <br><br>
+  <img src="apps/web/public/landing-page.png" alt="Telex Platform" width="100%" />
+
 </div>
 
 ---
