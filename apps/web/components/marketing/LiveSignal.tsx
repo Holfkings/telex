@@ -27,12 +27,12 @@ export default function LiveSignal() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-14 pb-6 border-b border-white/[0.08]">
           <div>
             <span className="font-mono text-[10px] tracking-[0.25em] text-[#8E8E93] uppercase block mb-2 font-medium">
-              [ RAZORPAY 2026 // LIVE TELEMETRY FEED ]
+              [ TELEX // LIVE TELEMETRY FEED ]
             </span>
             <h2
               className="font-header font-bold text-3xl md:text-5xl text-white tracking-[-0.035em]"
             >
-              Live Razorpay recovery &{" "}
+              Live dependency healing &{" "}
               <span className="text-silver-gradient">
                 patches.
               </span>
@@ -40,7 +40,7 @@ export default function LiveSignal() {
           </div>
           <div className="flex items-center gap-2 font-mono text-[11px] text-[#8E8E93]">
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-[0_0_6px_#ffffff]" />
-            <span>LISTENING TO RAZORPAY TEST MODE & RECOVERY TELEMETRY</span>
+            <span>LISTENING TO NPM & PYPI REGISTRY TELEMETRY</span>
           </div>
         </div>
 

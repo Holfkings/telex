@@ -6,8 +6,7 @@ import TelexLogo from "@/components/ui/TelexLogo";
 
 const NAV_LINKS = [
   { href: "#how-it-works", label: "01 // Pipeline" },
-  { href: "/dashboard/recovery", label: "02 // Live Stream" },
-  { href: "/dashboard", label: "03 // Dashboard" },
+  { href: "/dashboard", label: "02 // Dashboard" },
 ];
 
 export default function Nav() {
@@ -45,9 +44,6 @@ export default function Nav() {
         >
           <TelexLogo size={20} withBackground={true} />
           <span>TELEX</span>
-          <span className="font-mono text-[9px] text-[#8E8E93] tracking-widest hidden lg:inline-block whitespace-nowrap">
-            [ RAZORPAY 2026 ]
-          </span>
         </Link>
 
         {/* Nav links */}

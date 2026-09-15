@@ -26,12 +26,6 @@ class Settings(BaseSettings):
     anthropic_api_key: str = ""
     llm_provider_default: str = "gemini"
 
-    # Razorpay — Test Mode only; never commit keys, read from environment
-    razorpay_test_key_id: str = ""
-    razorpay_test_key_secret: str = ""
-    razorpay_webhook_secret: str = ""
-    payment_recovery_repo_name: str = ""
-
     # Deployment environment
     # Set to "production" in Render/Vercel to activate secret validation.
     environment: str = "development"
@@ -72,10 +66,6 @@ if _is_production:
     _missing: list[str] = []
     if not settings.nextauth_secret or settings.nextauth_secret == _DEFAULT_SECRET:
         _missing.append("NEXTAUTH_SECRET")
-    if not settings.razorpay_test_key_id:
-        _missing.append("RAZORPAY_TEST_KEY_ID")
-    if not settings.razorpay_test_key_secret:
-        _missing.append("RAZORPAY_TEST_KEY_SECRET")
     if not settings.github_app_id:
         _missing.append("GITHUB_APP_ID")
     if not settings.github_app_private_key:

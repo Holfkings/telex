@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import Nav from "@/components/marketing/Nav";
 import Hero from "@/components/marketing/Hero";
 import LiveMarquee from "@/components/marketing/LiveMarquee";
@@ -7,9 +8,9 @@ import FreeStrip from "@/components/marketing/FreeStrip";
 import Marginalia from "@/components/marketing/Marginalia";
 
 export const metadata: Metadata = {
-  title: "Telex — Autonomous Revenue Recovery & Self-Healing Agent for Razorpay",
+  title: "Telex — Autonomous Self-Healing for Your Codebase",
   description:
-    "Built for the Razorpay Pay 2026 Buildathon. Autonomous AI revenue recovery & self-healing patch agent for live Razorpay payment failures, webhook mismatches, and SDK breaks.",
+    "Telex autonomously detects breaking changes in your dependencies and opens pull requests to fix them — before your users notice.",
 };
 
 export default function LandingPage() {
@@ -32,28 +33,39 @@ export default function LandingPage() {
             <span className="font-display font-bold text-xs tracking-[0.25em]">
               TELEX
             </span>
-            <span className="text-[#666666]">©2026 // RAZORPAY BUILDATHON</span>
+            <span className="text-[#666666]">©2026 // AUTONOMOUS SELF-HEALING</span>
           </div>
 
           <p className="text-center">
-            RAZORPAY PAY 2026 BUILDATHON // AUTONOMOUS REVENUE RECOVERY & HEALING DAEMON
+            AUTONOMOUS DEPENDENCY HEALING DAEMON // DETECTS BREAKS, OPENS PRs, SHIPS FIXES
           </p>
 
           <div className="flex gap-6">
             {[
               { label: "GITHUB", href: "https://github.com/Kesavaraja67/telex" },
-              { label: "STREAM", href: "/dashboard/recovery" },
               { label: "DASHBOARD", href: "/dashboard" },
               { label: "STATUS", href: "https://telex-api.onrender.com/health" },
-            ].map((link) => (
-              <a
-                key={link.label}
-                href={link.href}
-                className="hover:text-white transition-colors"
-              >
-                {link.label}
-              </a>
-            ))}
+            ].map((link) =>
+              link.href.startsWith("/") ? (
+                <Link
+                  key={link.label}
+                  href={link.href}
+                  className="hover:text-white transition-colors"
+                >
+                  {link.label}
+                </Link>
+              ) : (
+                <a
+                  key={link.label}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-white transition-colors"
+                >
+                  {link.label}
+                </a>
+              )
+            )}
           </div>
         </div>
       </footer>

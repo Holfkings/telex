@@ -241,7 +241,7 @@ Provide a structured, high-tech architectural intelligence report. Return ONLY v
                 "risk_score": 12,
                 "recommended_actions": [
                     "Maintain continuous integration verification gate",
-                    "Keep Razorpay webhook idempotency verified",
+                    "Maintain webhook HMAC signature validation",
                 ],
                 "degraded": True,
             }
