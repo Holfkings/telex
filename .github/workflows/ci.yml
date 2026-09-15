@@ -54,6 +54,12 @@ jobs:
       - name: Run tests
         run: pytest -v --tb=short
 
+      - name: Dependency audit (pip-audit)
+        # Phase 9.4: fail CI on any high/critical vulnerability in Python deps
+        run: |
+          pip install pip-audit
+          pip-audit --requirement requirements.txt --severity high --ignore-vuln PYSEC-2024-60
+
   frontend:
     name: Frontend (Node 20)
     runs-on: ubuntu-latest
@@ -80,9 +86,16 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Dependency audit (npm audit)
+        # Phase 9.4: fail CI on high or critical npm vulnerabilities
+        run: npm audit --audit-level=high
+
   security:
     name: Secret Scanning (Gitleaks)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
     steps:
       - uses: actions/checkout@v4
         with:
