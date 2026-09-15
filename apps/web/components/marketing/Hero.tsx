@@ -55,9 +55,9 @@ export default function Hero() {
             className="inline-flex items-center gap-2.5 px-4 py-1.5 rounded-full border border-white/10 bg-white/[0.03] backdrop-blur-md text-[10px] font-mono text-[#8E8E93] tracking-[0.2em] uppercase"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-[0_0_8px_#ffffff]" />
-            <span className="text-white font-medium">RAZORPAY PAY 2026 BUILDATHON</span>
+            <span className="text-white font-medium">AUTONOMOUS SELF-HEALING</span>
             <span className="text-white/20">•</span>
-            <span className="text-[#8E8E93]">AUTONOMOUS REVENUE RECOVERY</span>
+            <span className="text-[#8E8E93]">DEPENDENCY HEALING DAEMON</span>
           </motion.div>
 
           {/* High-Impact Startup Headline (Plus Jakarta Sans ExtraBold) */}
@@ -67,9 +67,9 @@ export default function Hero() {
             transition={{ duration: 0.7, delay: 0.1 }}
             className={`${jakarta.className} font-extrabold text-4xl sm:text-5xl md:text-6xl tracking-[-0.04em] leading-[1.08] text-white`}
           >
-            Autonomous revenue recovery & code healing{" "}
+            Autonomous dependency healing{" "}
             <span className="text-silver-gradient block pt-1 drop-shadow-[0_0_30px_rgba(255,255,255,0.2)]">
-              for Razorpay payments.
+              for your codebase.
             </span>
           </motion.h1>
 
@@ -80,7 +80,7 @@ export default function Hero() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className={`${jakarta.className} text-sm sm:text-base text-[#9E9E9E] leading-relaxed max-w-lg font-normal`}
           >
-            Built for the Razorpay Pay 2026 Buildathon. Telex intercepts live checkout & webhook failures, recovers revenue via intelligent two-tier classification, and self-heals code defects into CI-verified pull requests before transactions drop.
+            Telex watches your dependencies. When a package ships a breaking change, Telex finds every call-site in your codebase, generates a CI-verified patch, and opens a pull request — before your users notice.
           </motion.p>
 
           {/* Dual Action Pill Buttons */}
@@ -108,9 +108,9 @@ export default function Hero() {
 
           {/* Micro Telemetry Meta */}
           <div className="flex flex-wrap items-center gap-4 sm:gap-6 font-mono text-[10px] text-[#71717A] uppercase tracking-widest pt-4 border-t border-white/[0.06] w-full">
-            <span>RAZORPAY TEST MODE VERIFIED</span>
+            <span>CI-VERIFIED PATCHES</span>
             <span>•</span>
-            <span>TIER-1 &lt;1MS FAST-PATH</span>
+            <span>TREE-SITTER AST ANALYSIS</span>
             <span>•</span>
             <span>GEMINI AST REPAIR</span>
             <span>•</span>

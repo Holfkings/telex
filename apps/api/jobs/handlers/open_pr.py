@@ -3,6 +3,7 @@ open_pr handler — bundles all verified patches for a repo+version into one PR.
 
 Payload shape:
     { "repo_id": "<uuid>", "package_version_id": "<uuid>" }
+    or: { "repo_id": "<uuid>", "code_usage_id": "<uuid>" }
 """
 import asyncio
 import logging
@@ -15,19 +16,16 @@ async def run(payload: dict) -> None:
     from db.session import AsyncSessionLocal
     from db.models import (
         Repo, PackageVersion, Package, DetectedChange,
-        CodeUsage, Patch, PullRequest, Installation, RecoveryEvent,
+        CodeUsage, Patch, PullRequest, Installation,
     )
     from services.github_service import open_patch_pr, get_installation_client
     from sqlalchemy import select
-    from datetime import datetime, timezone
 
     repo_id = uuid.UUID(payload["repo_id"])
     pv_id_raw = payload.get("package_version_id")
     package_version_id = uuid.UUID(pv_id_raw) if pv_id_raw else None
     cu_id_raw = payload.get("code_usage_id")
     code_usage_id = uuid.UUID(cu_id_raw) if cu_id_raw else None
-    re_id_raw = payload.get("recovery_event_id")
-    recovery_event_id = uuid.UUID(re_id_raw) if re_id_raw else None
 
     if package_version_id is None and code_usage_id is None:
         logger.error("open_pr: both package_version_id and code_usage_id are missing")
@@ -49,8 +47,8 @@ async def run(payload: dict) -> None:
             pkg_name = pkg.name if pkg else "unknown"
             pv_version = pv.version
         else:
-            pkg_name = "payment-handler"
-            pv_version = "runtime"
+            pkg_name = "dependency"
+            pv_version = "patch"
 
         installation = await session.get(Installation, repo.installation_id)
         if installation is None:
@@ -183,8 +181,7 @@ async def run(payload: dict) -> None:
     summary = "\n".join(body_lines)
 
     # Include a short unique ID so concurrent defects don't collide on the same branch.
-    # Priority: recovery_event_id → code_usage_id → fallback uuid4
-    unique_id_source = re_id_raw or cu_id_raw or str(uuid.uuid4())
+    unique_id_source = cu_id_raw or str(uuid.uuid4())
     short_id = unique_id_source.split("-")[0]  # e.g. "a3f2c1b8"
     branch_name = f"telex/{pkg_name}/{pv_version}/{short_id}"
 
@@ -200,7 +197,7 @@ async def run(payload: dict) -> None:
         logger.error("open_pr: failed to open PR: %s", exc)
         return
 
-    # Record the PR and update RecoveryEvent if applicable
+    # Record the PR in the database
     async with AsyncSessionLocal() as session:
         pr = PullRequest(
             repo_id=repo_id,
@@ -210,15 +207,6 @@ async def run(payload: dict) -> None:
             patch_ids=[p.id for p in patches],
         )
         session.add(pr)
-        await session.flush()
-
-        if recovery_event_id is not None:
-            event = await session.get(RecoveryEvent, recovery_event_id)
-            if event is not None:
-                event.outcome = "escalated"
-                event.pull_request_id = pr.id
-                event.resolved_at = datetime.now(timezone.utc)
-
         await session.commit()
 
     logger.info("open_pr: opened PR #%d on %s (%s)", pr_number, repo_full_name, pr_url)

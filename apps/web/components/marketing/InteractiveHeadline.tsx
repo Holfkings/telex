@@ -67,8 +67,8 @@ export default function InteractiveHeadline() {
         fontSize: "clamp(2.5rem, 7vw, 5.2rem)",
       }}
     >
-      <ScrambleWord original="RAZORPAY" className="mr-3 sm:mr-4" />
-      <ScrambleWord original="PAYMENTS" />
+      <ScrambleWord original="DEPENDENCIES" className="mr-3 sm:mr-4" />
+      <ScrambleWord original="UPDATED." />
       <br />
       <span className="text-[#ECE7DA]">
         <ScrambleWord original="JUST" className="mr-3 sm:mr-4" />

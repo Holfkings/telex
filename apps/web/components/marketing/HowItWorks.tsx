@@ -4,41 +4,41 @@ import { useState } from "react";
 
 const STEPS = [
   {
-    tag: "01 // INTERCEPT",
-    title: "Live Razorpay Telemetry & Webhook Interception",
+    tag: "01 // DETECT",
+    title: "Registry Monitoring & Breaking Change Detection",
     description:
-      "Telex monitors live Razorpay checkout attempts and cryptographically verifies webhooks (X-Razorpay-Signature) in real time. The moment a transaction drops or order values mismatch, it intercepts the failure.",
-    code: `// Failure Ingestion Schema
+      "Telex polls npm and PyPI for new package versions. When a new version ships, it extracts the changelog and uses Gemini to identify renamed, removed, or signature-changed symbols.",
+    code: `// Detected Change Schema
 {
-  "source": "razorpay_checkout",
-  "failure_type": "order_total_mismatch",
-  "classification": "code_defect",
-  "escalation": "ast_patch_generation"
+  "source": "npm_registry",
+  "symbol_old": "createClient",
+  "change_type": "signature_change",
+  "confidence": 0.97
 }`,
   },
   {
-    tag: "02 // CLASSIFY & REPAIR",
-    title: "Two-Tier Classifier & Gemini AST Synthesis",
+    tag: "02 // SCAN & PATCH",
+    title: "AST-Precise Call-Site Scanning & Gemini Patch Synthesis",
     description:
-      "Tier-1 resolves transient timeouts in <1ms with 0 tokens and bounded retry backoff. Code defects (e.g. order calculation bugs) trigger Gemini AST intelligence to synthesize a minimal unified diff.",
+      "Tree-sitter parses every TypeScript and Python file in the repo. Only files that actually call the changed symbol are targeted. Gemini synthesizes a minimal unified diff.",
     code: `// Unified Diff Synthesis
--const order = await razorpay.orders.create({ amount });
-+const order = await razorpay.orders.create({
-+  amount: toPaise(amount),
-+  currency: "INR"
+-const client = createClient(config);
++const client = createClient({
++  ...config,
++  timeout: config.timeout ?? 5000
 +});`,
   },
   {
-    tag: "03 // RECOVER & VERIFY",
-    title: "Bounded Recovery & Ephemeral Native CI Gate",
+    tag: "03 // VERIFY & PR",
+    title: "Ephemeral CI Gate & Human-Reviewed Pull Request",
     description:
-      "Transient failures recover real revenue in ₹ paise. Code repairs run through an isolated GitHub Actions verification gate (real build, tsc, and test suite) before opening a human-reviewed PR.",
+      "The patch runs through an isolated GitHub Actions gate (real install, tsc, and test suite) before a pull request is opened. Nothing merges automatically — a human always reviews.",
     code: `# Ephemeral Native CI Gate
 steps:
   - run: npm ci
   - run: npx tsc --noEmit
   - run: npm test
-# Gate: Target repository CI proved green`,
+# Gate: repo CI proved green`,
   },
 ];
 
@@ -52,17 +52,17 @@ export default function HowItWorks() {
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-14 pb-6 border-b border-white/[0.08]">
           <div>
             <span className="font-mono text-[10px] tracking-[0.25em] text-[#8E8E93] uppercase block mb-2 font-medium">
-              [ RAZORPAY 2026 PIPELINE // 01-03 ]
+              [ TELEX PIPELINE // 01-03 ]
             </span>
             <h2 className="font-header font-bold text-3xl md:text-5xl text-white tracking-[-0.035em]">
               Three steps.{" "}
               <span className="text-silver-gradient">
-                Zero lost revenue.
+                Zero broken builds.
               </span>
             </h2>
           </div>
           <p className="font-sans text-xs sm:text-sm text-[#9E9E9E] max-w-sm leading-relaxed">
-            From live Razorpay checkout failure or upstream SDK break to recovered revenue and verified pull request.
+            From upstream SDK break to CI-verified pull request — fully automated, human-reviewed.
           </p>
         </div>
 

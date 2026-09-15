@@ -1,15 +1,16 @@
 "use client";
 
 const TICKER_ITEMS = [
-  { label: "ENGINE B", detail: "AUTONOMOUS REVENUE RECOVERY" },
-  { label: "TWO-TIER CLASSIFIER", detail: "<1MS ZERO-TOKEN FAST-PATH" },
+  { label: "ENGINE A", detail: "AUTONOMOUS DEPENDENCY HEALING" },
+  { label: "TREE-SITTER AST", detail: "PRECISE CALL-SITE SCANNER" },
   { label: "VERIFICATION GATE", detail: "EPHEMERAL GITHUB ACTIONS CI" },
-  { label: "RAZORPAY TEST MODE", detail: "WEBHOOK & CHECKOUT VERIFIED" },
-  { label: "ENGINE A", detail: "TREE-SITTER AST CODE REPAIR" },
+  { label: "NPM & PYPI", detail: "REGISTRY MONITORING" },
+  { label: "GEMINI SYNTHESIS", detail: "AI AST CODE REPAIR" },
   { label: "SAFETY POLICY", detail: "DELIBERATE STOP RETRY GUARDS" },
   { label: "HMAC VALIDATION", detail: "CRYPTOGRAPHIC SHA-256 SECRETS" },
   { label: "PR SUBSTRATE", detail: "ZERO AUTO-MERGE // HUMAN REVIEWED" },
 ];
+
 
 export default function LiveMarquee() {
   return (

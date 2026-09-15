@@ -276,14 +276,12 @@ verify_patch_in_clone = verify_patch_via_github
 
 async def run(payload: dict) -> None:
     from db.session import AsyncSessionLocal
-    from db.models import CodeUsage, DetectedChange, PackageVersion, Patch, ValidationRun, Repo, Installation, RecoveryEvent
+    from db.models import CodeUsage, DetectedChange, PackageVersion, Patch, ValidationRun, Repo, Installation
     from services.patch_providers import get_patch_provider
     from datetime import datetime, timezone
     from config import settings
 
     code_usage_id = uuid.UUID(payload["code_usage_id"])
-    recovery_event_id_str = payload.get("recovery_event_id")
-    recovery_event_id = uuid.UUID(recovery_event_id_str) if recovery_event_id_str else None
 
     # ── Phase 1: read required scalars and repo details ────────────────────────
     async with AsyncSessionLocal() as session:
@@ -326,12 +324,6 @@ async def run(payload: dict) -> None:
         file_path = cu.file_path
         context = f"File: {cu.file_path}\nLines {cu.line_start}–{cu.line_end}"
 
-        # Extract observed behavioral evidence from the originating RecoveryEvent (if any)
-        observed_evidence = ""
-        if recovery_event_id:
-            recovery_event = await session.get(RecoveryEvent, recovery_event_id)
-            if recovery_event and recovery_event.action_taken:
-                observed_evidence = recovery_event.action_taken
 
     # ── Phase 2: call provider and verify with 1-retry fallback ────────────────
     provider = get_patch_provider()
@@ -389,12 +381,6 @@ async def run(payload: dict) -> None:
 
         if diff == "UNABLE_TO_PATCH":
             cu.status = "failed"
-            if recovery_event_id:
-                re = await session.get(RecoveryEvent, recovery_event_id)
-                if re:
-                    re.outcome = "unresolved"
-                    re.resolved_at = datetime.now(timezone.utc)
-                    re.action_taken = "Provider signaled UNABLE_TO_PATCH."
             await session.commit()
             logger.warning("generate_patch: provider returned UNABLE_TO_PATCH for usage %s", code_usage_id)
             return
@@ -426,7 +412,7 @@ async def run(payload: dict) -> None:
 
         if is_verified:
             cu.status = "patched"
-            if payload.get("recovery_event_id") and payload.get("repo_id"):
+            if payload.get("repo_id"):
                 from jobs.queue import enqueue_job
                 await enqueue_job(
                     session,
@@ -434,20 +420,10 @@ async def run(payload: dict) -> None:
                     payload={
                         "repo_id": payload["repo_id"],
                         "code_usage_id": str(code_usage_id),
-                        "recovery_event_id": payload["recovery_event_id"],
                     },
                 )
         else:
             cu.status = "failed"
-            if recovery_event_id:
-                re = await session.get(RecoveryEvent, recovery_event_id)
-                if re:
-                    re.outcome = "unresolved"
-                    re.resolved_at = datetime.now(timezone.utc)
-                    if v_result["verification_mode"] == "structural_only":
-                        re.action_taken = "Cannot verify — GitHub App not installed on target repo"
-                    else:
-                        re.action_taken = f"Patch verification gate failed: {v_result['log'][:300]}"
 
         await session.commit()
 

@@ -2,10 +2,11 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Telex — Autonomous Revenue Recovery & Self-Healing Agent for Razorpay",
+  title: "Telex — Autonomous Self-Healing for Your Codebase",
   description:
-    "Built for the Razorpay Pay 2026 Buildathon. Autonomous AI revenue recovery & self-healing patch agent for live Razorpay payment failures, webhook mismatches, and SDK breaks.",
+    "Telex autonomously detects breaking changes in your dependencies and opens pull requests to fix them — before your users notice.",
 };
+
 
 export default function RootLayout({
   children,
