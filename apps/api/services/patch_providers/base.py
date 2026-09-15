@@ -36,6 +36,21 @@ class PatchProvider(Protocol):
         """
         ...
 
+    async def generate_patch_candidates(
+        self,
+        old_api: str,
+        new_api: str,
+        code_snippet: str,
+        context: str,
+        defect_description: str = "",
+        observed_evidence: str = "",
+        n: int = 3,
+    ) -> list[str]:
+        """
+        Generate N candidate diffs for Best-of-N selection.
+        """
+        ...
+
     async def classify_failure(
         self,
         failure_type: str,

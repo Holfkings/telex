@@ -3,11 +3,12 @@ GitHub webhook receiver — Section 7.7.
 
 Verifies HMAC-SHA256 signatures before processing any payload.
 """
+from datetime import datetime, timezone
 import logging
 from fastapi import APIRouter, Request, HTTPException, Header
 from typing import Optional
 from db.session import AsyncSessionLocal
-from db.models import Installation, Repo
+from db.models import Installation, Repo, PullRequest
 from services.github_service import verify_webhook_signature
 from sqlalchemy import select
 
@@ -25,7 +26,7 @@ async def github_webhook(
     Receive GitHub App webhook events.
 
     Always verifies HMAC-SHA256 signature — returns 401 on failure.
-    Handles: installation.created, push (future).
+    Handles: installation.created, installation.deleted, installation_repositories, pull_request, push.
     """
     raw_body = await request.body()
 
@@ -47,6 +48,9 @@ async def github_webhook(
 
     elif event == "installation_repositories":
         await _handle_installation_repositories(payload)
+
+    elif event == "pull_request":
+        await _handle_pull_request(payload)
 
     elif event == "push":
         # Future: trigger a re-scan on push to default branch
@@ -162,3 +166,61 @@ async def _handle_installation_deleted(payload: dict) -> None:
                 repo.is_active = False
             await session.commit()
     logger.info("Installation deleted: %s", inst_data.get("account", {}).get("login"))
+
+
+async def _handle_pull_request(payload: dict) -> None:
+    """Track pull request merge and closure status for acceptance rate tracking."""
+    action = payload.get("action")
+    pr_data = payload.get("pull_request", {})
+    repo_data = payload.get("repository", {})
+
+    pr_number = pr_data.get("number")
+    github_repo_id = repo_data.get("id")
+
+    if not pr_number or not github_repo_id:
+        return
+
+    async with AsyncSessionLocal() as session:
+        repo_res = await session.execute(
+            select(Repo).where(Repo.github_repo_id == github_repo_id)
+        )
+        repo = repo_res.scalar_one_or_none()
+        if not repo:
+            return
+
+        pr_res = await session.execute(
+            select(PullRequest).where(
+                PullRequest.repo_id == repo.id,
+                PullRequest.github_pr_number == pr_number,
+            )
+        )
+        pr = pr_res.scalar_one_or_none()
+        if not pr:
+            return
+
+        if action == "closed":
+            is_merged = bool(pr_data.get("merged", False))
+            pr.status = "merged" if is_merged else "closed"
+            pr.merged = is_merged
+
+            merged_at_str = pr_data.get("merged_at")
+            if merged_at_str and is_merged:
+                try:
+                    pr.merged_at = datetime.fromisoformat(merged_at_str.replace("Z", "+00:00"))
+                except Exception:
+                    pr.merged_at = datetime.now(timezone.utc)
+            elif is_merged:
+                pr.merged_at = datetime.now(timezone.utc)
+
+            closed_at_str = pr_data.get("closed_at")
+            if closed_at_str:
+                try:
+                    pr.closed_at = datetime.fromisoformat(closed_at_str.replace("Z", "+00:00"))
+                except Exception:
+                    pr.closed_at = datetime.now(timezone.utc)
+            else:
+                pr.closed_at = datetime.now(timezone.utc)
+
+            await session.commit()
+            logger.info("PullRequest %s (#%s) updated: status=%s, merged=%s", pr.id, pr_number, pr.status, pr.merged)
+

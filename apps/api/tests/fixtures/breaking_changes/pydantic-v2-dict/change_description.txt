@@ -1,0 +1,2 @@
+Breaking change in Pydantic v2.0:
+BaseModel.dict() was deprecated and replaced with BaseModel.model_dump().

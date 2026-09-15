@@ -326,19 +326,60 @@ async def run(payload: dict) -> None:
         observed_evidence = ""
 
 
-    # ── Phase 2: call provider and verify with 1-retry fallback ────────────────
+    # ── Phase 2: call provider for Best-of-N candidate diffs (Section 5.2) ────
     provider = get_patch_provider()
     provider_name = settings.llm_provider_default
     model_name = provider.model_name
 
-    diff = await provider.generate_patch(
-        old_api=old_api,
-        new_api=new_api,
-        code_snippet=code_snippet,
-        context=context,
-        defect_description=defect_description,
-        observed_evidence=observed_evidence,
-    )
+    # Request 3 candidate diffs
+    if hasattr(provider, "generate_patch_candidates"):
+        candidates = await provider.generate_patch_candidates(
+            old_api=old_api,
+            new_api=new_api,
+            code_snippet=code_snippet,
+            context=context,
+            defect_description=defect_description,
+            observed_evidence=observed_evidence,
+            n=3,
+        )
+    else:
+        single_diff = await provider.generate_patch(
+            old_api=old_api,
+            new_api=new_api,
+            code_snippet=code_snippet,
+            context=context,
+            defect_description=defect_description,
+            observed_evidence=observed_evidence,
+        )
+        candidates = [single_diff]
+
+    # Cheap checks filter: validate_patch(candidate, code_snippet)
+    # Picks the "best" surviving candidate:
+    # 1. Must pass cheap checks (applies_cleanly and parses and scope_ok)
+    # 2. Heuristic: Smallest diff (minimal surgical edit: fewest lines added/removed)
+    valid_candidates = []
+    for cand in candidates:
+        if cand and cand != "UNABLE_TO_PATCH":
+            applies, parses, scope_ok = validate_patch(cand, code_snippet)
+            if applies and parses and scope_ok:
+                diff_lines = [
+                    line for line in cand.splitlines()
+                    if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
+                ]
+                score = len(diff_lines)
+                valid_candidates.append((score, cand))
+
+    if valid_candidates:
+        valid_candidates.sort(key=lambda x: x[0])
+        diff = valid_candidates[0][1]
+        logger.info(
+            "generate_patch: Best-of-N selected candidate with %d modified lines out of %d passing candidates",
+            valid_candidates[0][0],
+            len(valid_candidates),
+        )
+    else:
+        diff = "UNABLE_TO_PATCH"
+        logger.warning("generate_patch: all %d candidate diffs failed cheap checks", len(candidates))
 
     # ── Phase 3: write results in transaction and hand off to validate_patch ──
     async with AsyncSessionLocal() as session:

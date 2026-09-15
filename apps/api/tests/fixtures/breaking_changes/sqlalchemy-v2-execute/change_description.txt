@@ -1,0 +1,3 @@
+Breaking change in SQLAlchemy 2.0:
+Legacy Query API session.query() is deprecated.
+Use Session.execute(select(...)) or Session.scalars(select(...)) for querying models.

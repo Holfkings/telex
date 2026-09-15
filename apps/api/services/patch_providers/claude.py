@@ -40,12 +40,16 @@ class ClaudeProvider(PatchProvider):
         new_api: str,
         code_snippet: str,
         context: str,
+        defect_description: str = "",
+        observed_evidence: str = "",
     ) -> str:
         prompt = PATCH_PROMPT_TEMPLATE.format(
             old_api=old_api,
             new_api=new_api,
             code_snippet=code_snippet,
             context=context,
+            defect_description=defect_description or "Runtime defect detected — see observed evidence below.",
+            observed_evidence=observed_evidence or "No additional evidence provided.",
         )
         # Transient provider/transport errors propagate so worker can retry
         response = await self.client.messages.create(
@@ -59,6 +63,30 @@ class ClaudeProvider(PatchProvider):
             if hasattr(block, "text") and isinstance(block.text, str):
                 return extract_diff(block.text)
         return "UNABLE_TO_PATCH"
+
+    async def generate_patch_candidates(
+        self,
+        old_api: str,
+        new_api: str,
+        code_snippet: str,
+        context: str,
+        defect_description: str = "",
+        observed_evidence: str = "",
+        n: int = 3,
+    ) -> list[str]:
+        """Generate N candidate diffs for Best-of-N selection."""
+        candidates = []
+        for _ in range(n):
+            diff = await self.generate_patch(
+                old_api=old_api,
+                new_api=new_api,
+                code_snippet=code_snippet,
+                context=context,
+                defect_description=defect_description,
+                observed_evidence=observed_evidence,
+            )
+            candidates.append(diff)
+        return candidates
 
     async def classify_failure(
         self,

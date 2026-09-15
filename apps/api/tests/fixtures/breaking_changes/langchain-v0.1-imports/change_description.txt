@@ -1,0 +1,3 @@
+Breaking change in LangChain v0.1.0:
+PromptTemplate and ChatPromptTemplate moved from langchain.prompts to langchain_core.prompts.
+Importing from langchain.prompts raises deprecation or module not found warnings.

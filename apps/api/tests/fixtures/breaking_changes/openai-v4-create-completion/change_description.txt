@@ -1,0 +1,2 @@
+Breaking change in v4.0.0: openai.createCompletion() and Configuration were removed.
+Completions are now accessed via openai.chat.completions.create() using the new OpenAI client instance.
