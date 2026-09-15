@@ -25,6 +25,8 @@ logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
+from services.logging_utils import install_redacting_formatters
+install_redacting_formatters()
 logger = logging.getLogger("telex.worker")
 
 JOB_HANDLERS = {

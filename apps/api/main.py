@@ -22,31 +22,13 @@ logger = logging.getLogger("telex.api")
 
 
 # ── Security: redact API key patterns from all log output ───────────────────
-_KEY_PATTERN = re.compile(
-    r"(sk-[A-Za-z0-9]{20,}"
-    r"|AIza[A-Za-z0-9_\-]{30,}"
-    r"|sk-ant-[A-Za-z0-9_\-]{20,}"
-    r"|[A-Za-z0-9]{40,})"
+from services.logging_utils import (
+    RedactingFormatter,
+    _KEY_PATTERN,
+    install_redacting_formatters,
 )
 
-
-class _RedactKeysFilter(logging.Filter):
-    """Strip likely API key strings from all log records before emission."""
-
-    def filter(self, record: logging.LogRecord) -> bool:  # noqa: A003
-        record.msg = _KEY_PATTERN.sub("[REDACTED]", str(record.msg))
-        if record.args:
-            try:
-                record.args = tuple(
-                    _KEY_PATTERN.sub("[REDACTED]", str(a)) if isinstance(a, str) else a
-                    for a in (record.args if isinstance(record.args, tuple) else (record.args,))
-                )
-            except Exception:
-                pass
-        return True
-
-
-logging.root.addFilter(_RedactKeysFilter())
+install_redacting_formatters()
 # ───────────────────────────────────────────────────────────────────────
 
 

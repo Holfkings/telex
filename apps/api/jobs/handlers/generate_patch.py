@@ -277,11 +277,16 @@ verify_patch_in_clone = verify_patch_via_github
 async def run(payload: dict) -> None:
     from db.session import AsyncSessionLocal
     from db.models import CodeUsage, DetectedChange, PackageVersion, Patch, ValidationRun, Repo, Installation
-    from services.patch_providers import get_patch_provider
+    from services.patch_providers import get_patch_provider, get_patch_provider_for_user
     from datetime import datetime, timezone
     from config import settings
 
     code_usage_id = uuid.UUID(payload["code_usage_id"])
+    # user_id is optional — present when the job was triggered by an authenticated user
+    # (i.e. a BYOK-aware workflow). Falls back to platform-hosted provider when absent.
+    job_user_id: Optional[str] = payload.get("user_id")
+    # preferred_provider from payload overrides settings default (allows per-user provider choice)
+    preferred_provider: Optional[str] = payload.get("preferred_provider")
 
     # ── Phase 1: read required scalars and repo details ────────────────────────
     async with AsyncSessionLocal() as session:
@@ -327,8 +332,17 @@ async def run(payload: dict) -> None:
 
 
     # ── Phase 2: call provider for Best-of-N candidate diffs (Section 5.2) ────
-    provider = get_patch_provider()
-    provider_name = settings.llm_provider_default
+    # Phase 7: use BYOK-aware factory when a user_id is present in the payload.
+    # get_patch_provider_for_user() decrypts the stored key and updates last_used_at.
+    # Falls back to platform-hosted Gemini for users without a stored key.
+    if job_user_id:
+        provider = await get_patch_provider_for_user(
+            user_id=job_user_id,
+            preferred_provider=preferred_provider,
+        )
+    else:
+        provider = get_patch_provider(preferred_provider)
+    provider_name = getattr(provider, "model_name", preferred_provider or settings.llm_provider_default)
     model_name = provider.model_name
 
     # Request candidate diffs
@@ -419,10 +433,17 @@ async def run(payload: dict) -> None:
         await session.flush()
 
         from jobs.queue import enqueue_job
+        # Propagate user_id and installation_id through the job chain so downstream
+        # handlers (validate_patch, open_pr) can apply fairness caps and BYOK.
+        validate_payload: dict = {"patch_id": str(patch.id)}
+        if job_user_id:
+            validate_payload["user_id"] = job_user_id
+        if payload.get("installation_id"):
+            validate_payload["installation_id"] = payload["installation_id"]
         await enqueue_job(
             session,
             job_type="validate_patch",
-            payload={"patch_id": str(patch.id)},
+            payload=validate_payload,
         )
         await session.commit()
 

@@ -103,7 +103,9 @@ async function fetchKeys(): Promise<ApiKeyStatus[]> {
   const res = await fetch(`${getApiBase()}/api/settings/api-keys`, {
     credentials: "include",
   });
-  if (!res.ok) return [];
+  if (!res.ok) {
+    throw new Error(`Failed to load API keys (${res.status} ${res.statusText})`);
+  }
   const data = await res.json();
   return data.keys ?? [];
 }
@@ -283,13 +285,18 @@ function ProviderCard({
 export default function SettingsPage() {
   const [keyStatuses, setKeyStatuses] = useState<ApiKeyStatus[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const loadKeys = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
     try {
       const keys = await fetchKeys();
       setKeyStatuses(keys);
-    } catch {
-      /* treat as no keys connected */
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to load keys";
+      setLoadError(message);
+      // Preserves existing keyStatuses rather than marking every provider as disconnected
     } finally {
       setLoading(false);
     }
@@ -334,6 +341,19 @@ export default function SettingsPage() {
             platform&#39;s hosted Gemini is used as fallback — zero config required.
           </p>
         </div>
+
+        {loadError && (
+          <div className="flex items-center justify-between p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-xs">
+            <span>{loadError}</span>
+            <button
+              id="btn-retry-load-keys"
+              onClick={loadKeys}
+              className="px-3 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 transition-colors cursor-pointer"
+            >
+              Retry
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex flex-col gap-3">

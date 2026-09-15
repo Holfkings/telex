@@ -97,7 +97,7 @@ Telex ships with 10 provider implementations. Bring your own key in Settings —
 
 **Backend** — FastAPI · SQLAlchemy 2 async · PostgreSQL 15 · Alembic · APScheduler · PyGithub · Tree-Sitter 0.21 · cryptography (Fernet) · python-jose
 
-**Frontend** — Next.js 15 (App Router) · TypeScript strict · Vanilla CSS
+**Frontend** — Next.js 16 (App Router) · TypeScript strict · Vanilla CSS
 
 ---
 

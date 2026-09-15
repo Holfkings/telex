@@ -46,10 +46,8 @@ def check_rate_limit_and_wait(gh) -> None:
 
     This runs in a thread (all PyGithub calls are blocking). Raises
     RuntimeError if rate limit info is unavailable (treat as transient,
-    let the worker retry mechanism handle it).
-
-    Raising RateLimitExceeded propagates to the worker's exception handler,
-    which applies exponential back-off and re-queues the job.
+    let the worker retry mechanism handle it) — propagates to the worker's
+    exponential-backoff retry path.
     """
     import time
     try:
@@ -58,8 +56,9 @@ def check_rate_limit_and_wait(gh) -> None:
         remaining = core.remaining
         reset_at = core.reset  # datetime UTC
     except Exception as exc:
-        logger.warning("check_rate_limit_and_wait: could not read rate limit: %s", exc)
-        return
+        # Fail open on rate-limit read errors is dangerous; treat as transient
+        # and raise so the worker re-queues the job with exponential backoff.
+        raise RuntimeError("GitHub rate limit information unavailable") from exc
 
     if remaining < 50:
         now_ts = time.time()
@@ -81,12 +80,17 @@ def check_rate_limit_and_wait(gh) -> None:
 def get_installation_client(installation_id: int):
     """
     Return an authenticated PyGithub client scoped to a specific installation.
+
+    Phase 8.2: automatically calls check_rate_limit_and_wait before returning
+    so every caller gets the rate-limit gate without extra boilerplate.
     """
     if Github is None:
         raise RuntimeError("PyGithub not installed — run: pip install PyGithub")
 
     token = get_installation_token(installation_id)
-    return Github(token)
+    gh = Github(token)
+    check_rate_limit_and_wait(gh)
+    return gh
 
 
 async def open_patch_pr(

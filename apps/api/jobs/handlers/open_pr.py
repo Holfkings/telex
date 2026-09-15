@@ -231,33 +231,47 @@ async def run(payload: dict) -> None:
             return branch_ref.commit.sha
         head_sha = await _asyncio.to_thread(_get_head_sha)
 
-        # Derive conclusion from the most recent validation run
-        first_vr = next((vr_map.get(p.id) for p in patches if vr_map.get(p.id)), None)
-        if first_vr:
-            all_ok = (
-                first_vr.applies_cleanly
-                and first_vr.parses
-                and first_vr.scope_ok
-                and (first_vr.tests_pass is not False)
-                and (first_vr.typechecks is not False)
+        # Aggregate validations for all included patches (Comment 7 fix)
+        has_failure = False
+        has_missing = False
+        summary_rows = []
+
+        for idx, pd in enumerate(patch_dicts, 1):
+            vr = pd.get("validation")
+            fpath = pd.get("file_path", f"patch #{idx}")
+            if vr is None:
+                has_missing = True
+                summary_rows.append(f"- `{fpath}`: no validation run recorded (neutral)")
+                continue
+
+            gate_passed = (
+                bool(vr.applies_cleanly)
+                and bool(vr.parses)
+                and bool(vr.scope_ok)
+                and (vr.tests_pass is not False)
+                and (vr.typechecks is not False)
             )
-            check_conclusion = "success" if all_ok else "failure"
-            check_title = (
-                "Telex: patch verified (all gates passed)"
-                if all_ok
-                else "Telex: patch verification incomplete"
-            )
-            mode_label = getattr(first_vr, "verification_mode", None) or "structural_only"
-            check_summary = (
-                f"Verification mode: `{mode_label}` | "
-                f"Applies cleanly: {'✓' if first_vr.applies_cleanly else '✗'} | "
-                f"Tests: {'✓' if first_vr.tests_pass else ('N/A' if first_vr.tests_pass is None else '✗')} | "
-                f"Typecheck: {'✓' if first_vr.typechecks else ('N/A' if first_vr.typechecks is None else '✗')}"
-            )
-        else:
+            if not gate_passed:
+                has_failure = True
+                summary_rows.append(
+                    f"- `{fpath}`: failed gate (applies={vr.applies_cleanly}, parses={vr.parses}, "
+                    f"scope={vr.scope_ok}, tests={vr.tests_pass}, types={vr.typechecks})"
+                )
+            else:
+                mode_lbl = getattr(vr, "verification_mode", None) or "structural_only"
+                summary_rows.append(f"- `{fpath}`: passed all gates (mode: `{mode_lbl}`)")
+
+        if has_failure:
+            check_conclusion = "failure"
+            check_title = "Telex: patch verification failed"
+        elif has_missing:
             check_conclusion = "neutral"
-            check_title = "Telex: no validation run recorded"
-            check_summary = "No ValidationRun was found for this patch."
+            check_title = "Telex: verification incomplete (missing validation run)"
+        else:
+            check_conclusion = "success"
+            check_title = f"Telex: all {len(patch_dicts)} patch(es) verified (all gates passed)"
+
+        check_summary = "\n".join(summary_rows)
 
         await create_check_run(
             repo_full_name=repo_full_name,

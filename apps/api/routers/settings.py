@@ -107,32 +107,67 @@ async def store_api_key(
 
     now = datetime.now(timezone.utc)
 
+    row: Optional[UserApiKey] = None
     async with AsyncSessionLocal() as session:
-        # Upsert: update if provider row already exists for this user
-        result = await session.execute(
-            select(UserApiKey).where(
-                UserApiKey.user_id == user_id,
-                UserApiKey.provider == body.provider,
+        bind = session.get_bind()
+        if bind and "postgres" in bind.dialect.name.lower():
+            from sqlalchemy.dialects.postgresql import insert as pg_insert
+            stmt = (
+                pg_insert(UserApiKey)
+                .values(
+                    user_id=user_id,
+                    provider=body.provider,
+                    encrypted_key=ciphertext,
+                    created_at=now,
+                    last_used_at=None,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_user_api_keys_user_provider",
+                    set_={
+                        "encrypted_key": ciphertext,
+                        "created_at": now,
+                        "last_used_at": None,
+                    },
+                )
+                .returning(UserApiKey)
             )
-        )
-        existing = result.scalar_one_or_none()
-
-        if existing:
-            existing.encrypted_key = ciphertext
-            existing.created_at = now
-            existing.last_used_at = None
-            row = existing
+            result = await session.execute(stmt)
+            row = result.scalar_one()
+            await session.commit()
         else:
-            row = UserApiKey(
-                user_id=user_id,
-                provider=body.provider,
-                encrypted_key=ciphertext,
-                created_at=now,
-            )
-            session.add(row)
+            from sqlalchemy.exc import IntegrityError
+            for attempt in range(3):
+                try:
+                    result = await session.execute(
+                        select(UserApiKey).where(
+                            UserApiKey.user_id == user_id,
+                            UserApiKey.provider == body.provider,
+                        )
+                    )
+                    existing = result.scalar_one_or_none()
+                    if existing:
+                        existing.encrypted_key = ciphertext
+                        existing.created_at = now
+                        existing.last_used_at = None
+                        row = existing
+                    else:
+                        row = UserApiKey(
+                            user_id=user_id,
+                            provider=body.provider,
+                            encrypted_key=ciphertext,
+                            created_at=now,
+                        )
+                        session.add(row)
+                    await session.commit()
+                    await session.refresh(row)
+                    break
+                except IntegrityError:
+                    await session.rollback()
+                    if attempt == 2:
+                        raise
 
-        await session.commit()
-        await session.refresh(row)
+    if row is None:
+        raise HTTPException(status_code=500, detail="Failed to store API key")
 
     logger.info("settings: stored BYOK key for provider=%s user=%s", body.provider, user_id)
     return StoreKeyResponse(

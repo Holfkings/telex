@@ -35,6 +35,9 @@ jobs:
     env:
       DATABASE_URL: postgresql+asyncpg://telex:telex@localhost:5432/telex_test
       ENVIRONMENT: development
+      # Required by services/crypto.py — fail-closed if absent
+      TELEX_ENCRYPTION_KEY: ${{ secrets.TELEX_ENCRYPTION_KEY || '' }}
+      TELEX_TEST_MODE: "1"
 
     steps:
       - uses: actions/checkout@v4
@@ -55,10 +58,10 @@ jobs:
         run: pytest -v --tb=short
 
       - name: Dependency audit (pip-audit)
-        # Phase 9.4: fail CI on any high/critical vulnerability in Python deps
+        # Phase 9.4: fail CI on any detected vulnerability in Python deps
         run: |
           pip install pip-audit
-          pip-audit --requirement requirements.txt --severity high --ignore-vuln PYSEC-2024-60
+          pip-audit --requirement requirements.txt --ignore-vuln PYSEC-2024-60
 
   frontend:
     name: Frontend (Node 20)
