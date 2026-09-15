@@ -1,15 +1,14 @@
-# Telex API — Backend Service & Autonomous Recovery Worker
+# Telex API — Backend Service & Autonomous Worker
 
-> **FastAPI REST API, PostgreSQL Job Queue, and Autonomous Code Repair Substrate**  
-> *Engineered for the Razorpay Pay 2026 Buildathon.*
+> **FastAPI REST API, PostgreSQL Job Queue, and Autonomous Code Repair Substrate**
 
 ---
 
 ## Overview
 
-The `apps/api` service powers Telex's payment failure detection, two-tier classification, bounded auto-recovery, and self-healing pull request generation.
+The `apps/api` service powers Telex's dependency change detection, multi-language Tree-Sitter AST repository scanning, sandboxed patch verification, and self-healing GitHub Pull Request delivery.
 
-It runs as an asynchronous FastAPI application paired with a PostgreSQL row-level locked job queue (`SELECT ... FOR UPDATE SKIP LOCKED`), ensuring zero-duplicate execution across distributed workers.
+It runs as an asynchronous FastAPI application paired with a PostgreSQL row-level locked job queue (`SELECT ... FOR UPDATE SKIP LOCKED`), ensuring robust, duplicate-free task processing.
 
 ---
 
@@ -17,28 +16,36 @@ It runs as an asynchronous FastAPI application paired with a PostgreSQL row-leve
 
 | Path | Responsibility |
 |---|---|
-| `routers/payments.py` | Order creation, payment attempt tracking, batch failure simulator, and mismatch incident reporting. |
-| `routers/webhooks.py` | Cryptographic HMAC validation for Razorpay (`X-Razorpay-Signature`) and GitHub (`X-Hub-Signature-256`). |
-| `services/payment_service.py` | Razorpay Test Mode client wrapper, HMAC verification, and test card decline rules. |
-| `services/github_service.py` | GitHub App authentication, atomic Git Data tree commits, ephemeral CI workflow synthesis, and check run polling. |
-| `services/code_scanner.py` | Tree-Sitter AST parser for JavaScript, TypeScript, and TSX call-site discovery. |
-| `services/patch_providers/` | Gemini 2.5 Flash and Claude unified diff synthesis providers with exponential retry backoff. |
-| `jobs/handlers/` | Asynchronous worker tasks: `detect_payment_failure`, `diagnose_runtime_failure`, `recover_runtime`, `generate_patch`, `open_pr`. |
+| `routers/auth.py` | GitHub OAuth callback, signed session token generation, and `/api/auth/me` cross-domain authentication. |
+| `routers/repos.py` | Connected repository listing, sync, and verification policy management (`requires_tests`, `requires_typecheck`). |
+| `routers/packages.py` | Package tracking, version history, and detected breaking changes catalog. |
+| `routers/webhooks.py` | Cryptographic HMAC-SHA256 validation for GitHub events (`X-Hub-Signature-256`). |
+| `routers/stats.py` | Aggregated dashboard telemetry (repositories, packages, patches, open PRs). |
+| `services/code_scanner.py` | Tree-Sitter AST parser supporting TypeScript, TSX, JavaScript, and Python (`LANGUAGE_CONFIG`). |
+| `services/github_service.py` | GitHub App authentication, atomic Git tree commits, ephemeral CI workflow synthesis, and PR creation. |
+| `services/patch_providers/` | Gemini and Claude unified diff synthesis providers. |
+| `jobs/handlers/` | Asynchronous worker tasks: `poll_registry`, `extract_changes`, `scan_repo`, `generate_patch`, `open_pr`. |
 
 ---
 
 ## Endpoint Catalog
 
-### Payment & Recovery API (`/api/payments`)
-- `POST /api/payments/create-order`: Creates a Razorpay Test Mode order and records a `PaymentAttempt`.
-- `POST /api/payments/pay/{id}`: Simulates customer checkout with optional failure injection (`x-demo-key` protected).
-- `POST /api/payments/batch-run`: Injects a configurable batch of payments and simulated failure rates for live testing.
-- `POST /api/payments/report-mismatch`: Client incident bridge for reporting order total discrepancies (e.g., expected ₹999 vs actual ₹950).
-- `GET /api/payments/stats`: Computes Payment Recovery Rate, Execution Rate, and Revenue at Risk in real time.
-- `GET /api/payments/events`: Returns the live telemetry stream of `RecoveryEvent` records for dashboard visualization.
+### Authentication (`/api/auth`)
+- `GET /api/auth/github`: Initiates GitHub OAuth authorization flow.
+- `GET /api/auth/callback`: Handles GitHub OAuth code exchange and issues session cookies.
+- `GET /api/auth/me`: Returns the currently authenticated user based on signed session cookie.
+- `GET /api/auth/logout`: Clears session cookies and redirects to home.
+
+### Repositories (`/api/repos`)
+- `GET /api/repos`: Lists connected repositories for the authenticated user.
+- `GET /api/repos/{id}`: Detailed view of a repository with its detected changes and patches.
+
+### Packages (`/api/packages`)
+- `GET /api/packages`: Monitored package listing across npm and PyPI.
+- `GET /api/packages/{id}`: Package details with detected breaking changes.
 
 ### System Health (`/health`)
-- `GET /health`: Returns JSON status `{"status": "ok", "environment": "production"}`.
+- `GET /health`: Returns JSON status `{"status": "ok", "provider": "gemini"}`.
 
 ---
 
@@ -67,21 +74,18 @@ uvicorn main:app --reload --port 8000
 
 ---
 
-## Automated Test Suite (40/40 Passing)
+## Automated Test Suite (18/18 Passing)
 
 Run the full test suite with verbose output:
 ```bash
-pytest -v --tb=short
+pytest -v
 ```
 
 Expected result:
 ```text
-======================= 40 passed, 8 warnings in 3.40s =======================
+======================= 18 passed, 8 warnings in 3.50s =======================
 ```
 
 To run individual suites:
-- **E2E Recovery Suite**: `pytest tests/test_e2e_recovery_flow.py -v`
-- **Payment & HMAC Suite**: `pytest tests/test_payment_service.py -v`
-- **Patch Generation & CI Gate**: `pytest tests/test_patch_generation.py -v`
-- **Two-Tier Classifier**: `pytest tests/test_diagnose_runtime_failure.py -v`
 - **Tree-Sitter AST Scanner**: `pytest tests/test_code_scanner.py -v`
+- **Patch Generation & CI Gate**: `pytest tests/test_patch_generation.py -v`
