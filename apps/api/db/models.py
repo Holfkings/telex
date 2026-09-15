@@ -239,7 +239,7 @@ class Job(Base):
     __tablename__ = "jobs"
     __table_args__ = (
         CheckConstraint(
-            "job_type IN ('poll_registry', 'extract_changes', 'scan_repo', 'generate_patch', 'open_pr')",
+            "job_type IN ('poll_registry', 'extract_changes', 'scan_repo', 'generate_patch', 'validate_patch', 'open_pr')",
             name="ck_jobs_type",
         ),
         CheckConstraint(

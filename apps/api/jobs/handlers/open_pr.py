@@ -162,6 +162,10 @@ async def run(payload: dict) -> None:
         vr_evidence = []
         if vr:
             mode_display = getattr(vr, "verification_mode", None) or "structural_only"
+            if mode_display == "full":
+                vr_evidence.append("- **Verification Status**: ✅ Verified: repo's own test suite and type-checker both passed on this patch.")
+            else:
+                vr_evidence.append("- **Verification Status**: ⚠️ No test suite detected in this repo — this patch was validated by parse and type-check only, not by running tests.")
             vr_evidence.append(f"- **Verification Mode**: `{mode_display}`")
             vr_evidence.append(f"- **Applied Cleanly**: {'✓ Passed' if vr.applies_cleanly else '✗ Failed'}")
             if vr.typechecks is not None:

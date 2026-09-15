@@ -340,41 +340,7 @@ async def run(payload: dict) -> None:
         observed_evidence=observed_evidence,
     )
 
-    v_result = await verify_patch_via_github(
-        repo_full_name=repo_full_name,
-        default_branch=repo_default_branch,
-        installation_github_id=installation_github_id,
-        diff=diff,
-        code_snippet=code_snippet,
-        file_path=file_path,
-        requires_tests=repo_requires_tests,
-        requires_typecheck=repo_requires_typecheck,
-    )
-
-    # If verification failed and diff was not an explicit refusal, retry ONCE with error context
-    if not v_result["is_verified"] and diff != "UNABLE_TO_PATCH" and v_result["verification_mode"] in ("github_actions", "git_apply_failed", "git_apply_clean"):
-        logger.info("generate_patch: first attempt failed verification (%s) — retrying once with error feedback", v_result["log"])
-        retry_context = f"{context}\n\nIMPORTANT: Your previous patch attempt failed verification with error:\n{v_result['log']}\nPlease generate a corrected minimal unified diff."
-        diff = await provider.generate_patch(
-            old_api=old_api,
-            new_api=new_api,
-            code_snippet=code_snippet,
-            context=retry_context,
-            defect_description=defect_description,
-            observed_evidence=observed_evidence,
-        )
-        v_result = await verify_patch_via_github(
-            repo_full_name=repo_full_name,
-            default_branch=repo_default_branch,
-            installation_github_id=installation_github_id,
-            diff=diff,
-            code_snippet=code_snippet,
-            file_path=file_path,
-            requires_tests=repo_requires_tests,
-            requires_typecheck=repo_requires_typecheck,
-        )
-
-    # ── Phase 3: write results in transaction ──────────────────────────────────
+    # ── Phase 3: write results in transaction and hand off to validate_patch ──
     async with AsyncSessionLocal() as session:
         cu = await session.get(CodeUsage, code_usage_id)
         if cu is None:
@@ -386,57 +352,29 @@ async def run(payload: dict) -> None:
             logger.warning("generate_patch: provider returned UNABLE_TO_PATCH for usage %s", code_usage_id)
             return
 
-        is_verified = v_result["is_verified"]
-
         patch = Patch(
             code_usage_id=code_usage_id,
             diff=diff,
             llm_provider=provider_name,
             llm_model=model_name,
             prompt_version="v1",
-            verified=is_verified,
+            verified=False,
         )
         session.add(patch)
         await session.flush()
 
-        vr = ValidationRun(
-            patch_id=patch.id,
-            verification_mode=v_result["verification_mode"],
-            applies_cleanly=v_result["applies_cleanly"],
-            parses=v_result["parses"],
-            typechecks=v_result["typechecks"],
-            tests_pass=v_result["tests_pass"],
-            scope_ok=v_result["scope_ok"],
-            log=v_result["log"],
+        from jobs.queue import enqueue_job
+        await enqueue_job(
+            session,
+            job_type="validate_patch",
+            payload={"patch_id": str(patch.id)},
         )
-        session.add(vr)
-
-        if is_verified:
-            cu.status = "patched"
-            if payload.get("repo_id"):
-                from jobs.queue import enqueue_job
-                await enqueue_job(
-                    session,
-                    job_type="open_pr",
-                    payload={
-                        "repo_id": payload["repo_id"],
-                        "code_usage_id": str(code_usage_id),
-                    },
-                )
-        else:
-            cu.status = "failed"
-
         await session.commit()
 
     logger.info(
-        "generate_patch: %s for usage %s (verified=%s, mode=%s, applies=%s, tsc=%s, tests=%s)",
+        "generate_patch: created candidate patch %s via %s, enqueued validate_patch",
+        patch.id,
         provider_name,
-        code_usage_id,
-        is_verified,
-        v_result["verification_mode"],
-        v_result["applies_cleanly"],
-        v_result["typechecks"],
-        v_result["tests_pass"],
     )
 
 
