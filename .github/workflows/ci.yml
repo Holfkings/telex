@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -51,6 +51,11 @@ jobs:
       - name: Run tests
         run: pytest -v --tb=short
 
+      - name: Dependency vulnerability scan (pip-audit)
+        run: |
+          pip install pip-audit
+          python -m pip_audit -r requirements.txt
+
   frontend:
     name: Frontend (Node 20)
     runs-on: ubuntu-latest
@@ -76,3 +81,19 @@ jobs:
 
       - name: Lint
         run: npm run lint
+
+      - name: Dependency security scan (npm audit)
+        run: npm audit --audit-level=high
+
+  security:
+    name: Secret Scanning (Gitleaks)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
