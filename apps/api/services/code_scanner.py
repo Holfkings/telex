@@ -12,9 +12,49 @@ from pathlib import Path
 logger = logging.getLogger(__name__)
 
 
+LANGUAGE_CONFIG = {
+    "typescript": {
+        "parser_name": "typescript",
+        "extensions": {".ts", ".mts", ".cts"},
+        "call_node_type": "call_expression",
+        "queries": [
+            ("(call_expression function: (identifier) @fn)", "fn"),
+            ("(call_expression function: (member_expression property: (property_identifier) @prop))", "prop"),
+        ],
+    },
+    "tsx": {
+        "parser_name": "tsx",
+        "extensions": {".tsx"},
+        "call_node_type": "call_expression",
+        "queries": [
+            ("(call_expression function: (identifier) @fn)", "fn"),
+            ("(call_expression function: (member_expression property: (property_identifier) @prop))", "prop"),
+        ],
+    },
+    "javascript": {
+        "parser_name": "javascript",
+        "extensions": {".js", ".jsx", ".mjs", ".cjs"},
+        "call_node_type": "call_expression",
+        "queries": [
+            ("(call_expression function: (identifier) @fn)", "fn"),
+            ("(call_expression function: (member_expression property: (property_identifier) @prop))", "prop"),
+        ],
+    },
+    "python": {
+        "parser_name": "python",
+        "extensions": {".py"},
+        "call_node_type": "call",
+        "queries": [
+            ("(call function: (identifier) @fn)", "fn"),
+            ("(call function: (attribute attribute: (identifier) @prop))", "prop"),
+        ],
+    },
+}
+
+
 def find_usages(file_path: str, source: bytes, symbol_name: str) -> list[dict]:
     """
-    Scan `source` (raw bytes of a TypeScript/JS file) for call sites of
+    Scan `source` (raw bytes of a code file) for call sites of
     `symbol_name` using tree-sitter AST queries.
 
     Returns a list of dicts:
@@ -35,12 +75,17 @@ def find_usages(file_path: str, source: bytes, symbol_name: str) -> list[dict]:
 
     # Detect language from extension
     suffix = Path(file_path).suffix.lower()
-    if suffix == ".tsx":
-        lang_name = "tsx"
-    elif suffix in (".ts", ".mts", ".cts"):
-        lang_name = "typescript"
-    else:
-        lang_name = "javascript"
+    selected_config = None
+    for config in LANGUAGE_CONFIG.values():
+        if suffix in config["extensions"]:
+            selected_config = config
+            break
+
+    if selected_config is None:
+        return []
+
+    lang_name = selected_config["parser_name"]
+    call_node_type = selected_config["call_node_type"]
 
     try:
         parser = tsl.get_parser(lang_name)
@@ -54,34 +99,17 @@ def find_usages(file_path: str, source: bytes, symbol_name: str) -> list[dict]:
     # Encode the symbol name once for byte-level comparison
     symbol_bytes = symbol_name.encode("utf-8")
 
-    # ── Query 1: plain identifier call — createCompletion(...) ──────────────
-    # Filter by node.text in Python, then traverse to enclosing call_expression.
-    identifier_query_src = """
-        (call_expression
-          function: (identifier) @fn)
-    """
-
-    # ── Query 2: member-expression call — obj.createCompletion(...) ─────────
-    member_query_src = """
-        (call_expression
-          function: (member_expression
-            property: (property_identifier) @prop))
-    """
-
     usages: list[dict] = []
 
-    for query_src, filter_capture in (
-        (identifier_query_src, "fn"),
-        (member_query_src, "prop"),
-    ):
+    for query_src, filter_capture in selected_config["queries"]:
         try:
             query = language.query(query_src)
             captures = query.captures(tree.root_node)
             for node, cap_name in captures:
                 if cap_name == filter_capture and node.text == symbol_bytes:
-                    # Traverse upward to find enclosing call_expression
+                    # Traverse upward to find enclosing call node
                     curr = node.parent
-                    while curr is not None and curr.type != "call_expression":
+                    while curr is not None and curr.type != call_node_type:
                         curr = curr.parent
                     call_node = curr if curr is not None else node
 
@@ -98,7 +126,7 @@ def find_usages(file_path: str, source: bytes, symbol_name: str) -> list[dict]:
                         }
                     )
         except Exception as exc:
-            logger.warning("tree-sitter query failed: %s", exc)
+            logger.warning("tree-sitter query failed for %s: %s", lang_name, exc)
 
     # Deduplicate by unique byte range (start_byte, end_byte)
     seen: set[tuple[int, int]] = set()

@@ -9,24 +9,36 @@ const NAV_LINKS = [
   { href: "/dashboard", label: "02 // Dashboard" },
 ];
 
+function getApiUrl(): string {
+  return (
+    process.env.NEXT_PUBLIC_API_URL ||
+    (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+      ? "https://telex-api.onrender.com"
+      : "http://localhost:8000")
+  );
+}
+
 export default function Nav() {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
   const [user, setUser] = useState<string | null>(null);
 
   useEffect(() => {
-    // Check if session cookie exists
-    const match = document.cookie.match(/telex_user=([^;]+)/);
-    if (match) {
-      setUser(decodeURIComponent(match[1]));
-    }
+    const apiUrl = getApiUrl();
+
+    fetch(`${apiUrl}/api/auth/me`, { credentials: "include" })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.authenticated && data.user?.github_login) {
+          setUser(data.user.github_login);
+        }
+      })
+      .catch(() => {
+        // Auth check failed silently — treat as logged out, no error UI needed here.
+      });
   }, []);
 
   const handleAuthAction = () => {
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-        ? "https://telex-api.onrender.com"
-        : "http://localhost:8000");
+    const apiUrl = getApiUrl();
     if (user) {
       window.location.href = "/dashboard";
     } else {
