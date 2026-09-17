@@ -147,9 +147,9 @@ def _build_pr_body(change_type: str, confidence: float) -> tuple[str, str]:
     """
     is_semantic_risk = classify_risk(change_type, confidence)
     risk_flag = (
-        "⚠️ Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
+        "[Warning] Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
         if is_semantic_risk
-        else "✅ Mechanical change"
+        else "[Safe] Mechanical change"
     )
     classification_table = (
         "## Change classification\n"
@@ -165,19 +165,19 @@ def _build_pr_body(change_type: str, confidence: float) -> tuple[str, str]:
 
 
 def test_pr_body_semantic_risk_contains_warning_and_prefix():
-    """For a behavior_change, PR title gets [semantic-risk] and body has ⚠️ row."""
+    """For a behavior_change, PR title gets [semantic-risk] and body has warning row."""
     title, table = _build_pr_body("behavior_change", 0.85)
     assert title.startswith("[semantic-risk]")
     assert "## Change classification" in table
-    assert "⚠️ Possible semantic/behavior change" in table
+    assert "[Warning] Possible semantic/behavior change" in table
     assert "behavior_change" in table
 
 
 def test_pr_body_mechanical_change_no_prefix():
-    """For a high-confidence removed change, title has no prefix and body has ✅ row."""
+    """For a high-confidence removed change, title has no prefix and body has safe row."""
     title, table = _build_pr_body("removed", 0.95)
     assert not title.startswith("[semantic-risk]")
-    assert "✅ Mechanical change" in table
+    assert "[Safe] Mechanical change" in table
     assert "removed" in table
 
 
@@ -185,11 +185,11 @@ def test_pr_body_low_confidence_signature_change_is_semantic():
     """Low-confidence signature_change triggers [semantic-risk] prefix."""
     title, table = _build_pr_body("signature_change", 0.60)
     assert title.startswith("[semantic-risk]")
-    assert "⚠️ Possible semantic/behavior change" in table
+    assert "[Warning] Possible semantic/behavior change" in table
 
 
 def test_pr_body_high_confidence_signature_change_is_mechanical():
     """High-confidence signature_change stays mechanical — no prefix."""
     title, table = _build_pr_body("signature_change", 0.90)
     assert not title.startswith("[semantic-risk]")
-    assert "✅ Mechanical change" in table
+    assert "[Safe] Mechanical change" in table
