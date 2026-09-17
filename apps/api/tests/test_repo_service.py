@@ -149,6 +149,103 @@ async def test_sync_github_app_repositories_no_credentials():
 
 
 @pytest.mark.asyncio
+async def test_sync_github_app_repositories_success():
+    import uuid
+    from db.models import Repo
+    from services.repo_service import sync_github_app_repositories_async
+
+    mock_inst = MagicMock()
+    mock_inst.id = 101
+    mock_inst.raw_data = {"account": {"login": "test-org", "type": "Organization"}}
+
+    mock_integration = MagicMock()
+    mock_integration.get_installations.return_value = [mock_inst]
+    mock_integration.get_access_token.return_value = MagicMock(token="fake-token")
+
+    existing_repo = Repo(
+        id=uuid.uuid4(),
+        installation_id=uuid.uuid4(),
+        github_repo_id=1,
+        full_name="test-org/repo-1",
+        default_branch="main",
+        is_active=True,
+    )
+    stale_repo = Repo(
+        id=uuid.uuid4(),
+        installation_id=uuid.uuid4(),
+        github_repo_id=999,
+        full_name="test-org/old-repo",
+        default_branch="main",
+        is_active=True,
+    )
+
+    mock_session = AsyncMock()
+    mock_session.__aenter__.return_value = mock_session
+    mock_session.__aexit__.return_value = None
+
+    inst_result = MagicMock()
+    inst_result.scalar_one_or_none.return_value = None
+
+    repo1_result = MagicMock()
+    repo1_result.scalar_one_or_none.return_value = existing_repo
+
+    repo2_result = MagicMock()
+    repo2_result.scalar_one_or_none.return_value = None
+
+    all_repos_result = MagicMock()
+    all_repos_result.scalars.return_value = MagicMock(
+        all=MagicMock(return_value=[existing_repo, stale_repo])
+    )
+
+    mock_session.execute = AsyncMock(
+        side_effect=[inst_result, repo1_result, repo2_result, all_repos_result]
+    )
+    mock_session.flush = AsyncMock()
+    mock_session.commit = AsyncMock()
+
+    resp1 = MagicMock(
+        status_code=200,
+        json=MagicMock(
+            return_value={
+                "total_count": 2,
+                "repositories": [
+                    {"id": 1, "full_name": "test-org/repo-1", "default_branch": "main"}
+                ],
+            }
+        ),
+    )
+    resp2 = MagicMock(
+        status_code=200,
+        json=MagicMock(
+            return_value={
+                "total_count": 2,
+                "repositories": [
+                    {"id": 2, "full_name": "test-org/repo-2", "default_branch": "main"}
+                ],
+            }
+        ),
+    )
+
+    mock_http_client = AsyncMock()
+    mock_http_client.__aenter__.return_value = mock_http_client
+    mock_http_client.__aexit__.return_value = None
+    mock_http_client.get = AsyncMock(side_effect=[resp1, resp2])
+
+    with patch("services.repo_service.get_settings") as mock_settings:
+        mock_settings.return_value = MagicMock(
+            github_app_id="12345",
+            github_app_private_key="fake-pem-key",
+        )
+        with patch("github.GithubIntegration", return_value=mock_integration):
+            with patch("db.session.AsyncSessionLocal", return_value=mock_session):
+                with patch("httpx.AsyncClient", return_value=mock_http_client):
+                    await sync_github_app_repositories_async()
+
+    assert existing_repo.is_active is True
+    assert stale_repo.is_active is False
+
+
+@pytest.mark.asyncio
 async def test_get_core_repositories_with_db_repos():
     import uuid
     from datetime import datetime, timezone

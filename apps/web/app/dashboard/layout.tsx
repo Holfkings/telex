@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { motion } from "motion/react";
 import TelexLogo from "@/components/ui/TelexLogo";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import { getApiUrl } from "@/lib/api";
 
 interface AuthUser {
   id?: string;
@@ -53,10 +54,6 @@ const NAV_ITEMS = [
   },
 ];
 
-function getApiUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-}
-
 export default function DashboardLayout({
   children,
 }: {
@@ -75,34 +72,17 @@ export default function DashboardLayout({
       window.location.hostname === "127.0.0.1"
     );
 
-    // 1. Capture token and login from URL params (e.g. after OAuth redirect or dev login)
-    const urlParams = new URLSearchParams(window.location.search);
-    const tokenParam = urlParams.get("token");
-    const loginParam = urlParams.get("login");
-
-    if (tokenParam) {
-      localStorage.setItem("telex_token", tokenParam);
-      if (loginParam) {
-        localStorage.setItem("telex_user", loginParam);
-      }
-      // Clean query params from address bar
+    // Clean query parameters from address bar if any were provided
+    if (window.location.search) {
       const cleanUrl = window.location.pathname;
       window.history.replaceState({}, document.title, cleanUrl);
     }
 
-    const token = localStorage.getItem("telex_token");
-    const cachedUser = localStorage.getItem("telex_user");
     const apiUrl = getApiUrl();
 
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    // 2. Validate session against backend /api/auth/me
+    // Validate session against backend /api/auth/me via HttpOnly cookie
     fetch(`${apiUrl}/api/auth/me`, {
       credentials: "include",
-      headers,
     })
       .then((res) => {
         if (!res.ok) throw new Error("Auth request failed");
@@ -111,26 +91,15 @@ export default function DashboardLayout({
       .then((data) => {
         if (data.authenticated && data.user) {
           setUser(data.user);
-          if (data.user.github_login) {
-            localStorage.setItem("telex_user", data.user.github_login);
-          }
-          setAuthStatus("authenticated");
-        } else if (token && cachedUser) {
-          // Fallback authenticated state from cached token/user
-          setUser({ github_login: cachedUser });
           setAuthStatus("authenticated");
         } else {
+          setUser(null);
           setAuthStatus("unauthenticated");
         }
       })
       .catch(() => {
-        // If API is temporarily slow or unreachable, but token exists in localStorage
-        if (token && cachedUser) {
-          setUser({ github_login: cachedUser });
-          setAuthStatus("authenticated");
-        } else {
-          setAuthStatus("unauthenticated");
-        }
+        setUser(null);
+        setAuthStatus("unauthenticated");
       });
   }, []);
 

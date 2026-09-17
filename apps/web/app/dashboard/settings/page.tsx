@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import KineticHeader from "@/components/ui/KineticHeader";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import { getApiUrl } from "@/lib/api";
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
 const PROVIDERS = [
@@ -89,8 +90,7 @@ interface ApiKeyStatus {
 
 // ── API helpers ──────────────────────────────────────────────────────────────
 function getApiBase(): string {
-  if (typeof window === "undefined") return "";
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  return getApiUrl();
 }
 
 async function fetchKeys(): Promise<ApiKeyStatus[]> {

@@ -2,12 +2,12 @@ name: Ruff Linting
 
 on:
   push:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "apps/api/**"
       - ".github/workflows/ruff.yml"
   pull_request:
-    branches: ["**"]
+    branches: [main]
     paths:
       - "apps/api/**"
       - ".github/workflows/ruff.yml"

@@ -1,0 +1,19 @@
+# Gitleaks configuration — Section 9.2 Secret Scanning
+# https://github.com/gitleaks/gitleaks
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Allow mock secrets in automated test files"
+paths = [
+  '''apps/api/tests/.*''',
+  '''\.gitleaks\.toml''',
+]
+stopwords = [
+  "sk-1234567890",
+  "sk-real-test-token-1234",
+]
+regexes = [
+  '''sk-[0-9a-zA-Z_-]+''',
+]

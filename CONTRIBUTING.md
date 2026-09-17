@@ -31,9 +31,10 @@ To ensure fair collaboration, prevent duplicate efforts, and maintain an orderly
 - A contributor can be assigned to **at most two (2) active issues at the same time**.
 - Once you complete and merge your open pull requests, you may request assignment on new issues.
 
-### 4. Professional Communication
-- All communications across issues, pull requests, and discussions must be **polite, courteous, constructive, and professional**.
-- Explain technical decisions clearly, ask questions constructively, and respect the time of fellow contributors and maintainers.
+### 4. Professional Conversation Only
+- All communications across issues, pull requests, code reviews, and discussions must strictly remain **polite, courteous, constructive, and professional**.
+- Always explain technical decisions clearly, ask questions respectfully, and treat maintainers and fellow contributors with dignity.
+- Unprofessional language, personal attacks, sarcasm, or dismissive attitudes will not be tolerated and will result in warnings or restrictions under our [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ---
 
@@ -155,16 +156,23 @@ To maintain code quality, reliability, and visual excellence, every pull request
   - **Screen Recordings** (GIF, MP4, WebM) demonstrating the interaction flow.
 - PRs modifying visual components without screenshots or video recordings will be paused until provided.
 
-### 2. 80% Test Coverage Requirement
-- All backend code changes must include unit tests.
-- Our CI pipeline enforces a minimum of **80% test coverage** using `pytest-cov`.
-- Test your coverage locally before opening a PR:
+### 2. Appropriate Tests & Above 80% Test Coverage
+- **Appropriate automated tests are required for all changes.** Every bug fix, new feature, and logic adjustment must include comprehensive unit/integration tests.
+- Backend tests are written with `pytest` in `apps/api/tests/`.
+- The CI test suite strictly enforces a minimum of **80% test coverage** using `pytest-cov` (`--cov-fail-under=80`). PRs failing this gate cannot be merged.
+- Always run the test suite and verify test coverage locally before submitting:
   ```bash
   cd apps/api
   pytest --cov=. --cov-report=term-missing --cov-fail-under=80
   ```
 
-### 3. Conventional Commit Messages
+### 3. Strict Git Policy: No Rebasing & No Force Pushing
+To maintain a safe, traceable, and conflict-free collaboration environment:
+- **No Force Pushing (`git push --force` or `--force-with-lease`)**: Never force push to branches that have open pull requests. Force pushing rewrites commit history, breaks reviewers' comment threads, and deletes previous review states.
+- **No Rebasing PR Branches**: Do not rebase branches after opening a pull request. If you need to sync your branch with `main`, merge `main` into your branch (`git merge origin/main`) or let maintainers handle branch updates.
+- **Squash and Merge Only**: Maintainers merge all approved pull requests using GitHub's **Squash and Merge**. This guarantees a clean, linear, and atomic commit history on `main` without requiring contributors to rebase manually.
+
+### 4. Conventional Commit Messages
 We follow the [Conventional Commits](https://www.conventionalcommits.org/) specification:
 - `feat:` A new feature
 - `fix:` A bug fix
@@ -176,7 +184,7 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 
 *Example*: `feat(scanner): add tree-sitter support for python decorator calls`
 
-### 4. Branch Naming
+### 5. Branch Naming
 - Features: `feat/short-description`
 - Bug fixes: `fix/short-description`
 - Documentation: `docs/short-description`
@@ -187,12 +195,15 @@ We follow the [Conventional Commits](https://www.conventionalcommits.org/) speci
 
 Before submitting your PR, make sure you can check off all items:
 
-- [ ] My code adheres to the project's formatting (`black`) and linting (`ruff`) standards.
-- [ ] All comments and documentation are written in **simple, clear English**.
-- [ ] Backend test suite passes and maintains at least **80% test coverage**.
-- [ ] Frontend type check (`npx tsc --noEmit`) and lint (`npm run lint`) pass with zero errors.
-- [ ] For any UI/visual changes: **Screenshots or screen-recorded video (GIF/MP4) are attached** to the PR description.
-- [ ] Commit history is clean and follows Conventional Commits.
+- [ ] **Professional Conversation**: All communication in the issue, PR description, and reviews is polite, respectful, and professional.
+- [ ] **Simple English Comments**: All code comments and docstrings are written strictly in simple, clear, and direct English.
+- [ ] **Appropriate Tests Included**: Comprehensive tests have been added or updated for all modified logic.
+- [ ] **Test Coverage Above 80%**: Backend test suite passes locally and maintains **above 80% test coverage** (`--cov-fail-under=80`).
+- [ ] **No Force Pushes or Rebasing**: Commit history has not been rewritten or force pushed (`--force`).
+- [ ] **Formatting & Linting**: Code passes `black .` formatting and `ruff check .` linting in `apps/api`.
+- [ ] **Frontend Validation**: Frontend passes type checking (`npx tsc --noEmit`) and linting (`npm run lint`) with zero errors.
+- [ ] **Visual Evidence Attached**: For any UI, styling, or dashboard changes, screenshots or screen recordings (GIF/MP4) are attached.
+- [ ] **Clean Commits**: Commit messages follow Conventional Commits standard (`feat:`, `fix:`, `docs:`).
 
 ---
 

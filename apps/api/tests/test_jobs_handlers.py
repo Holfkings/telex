@@ -115,7 +115,7 @@ async def test_extract_changes_with_detected_changes(monkeypatch):
 
     mock_changes = [
         {
-            "change_type": "renamed_symbol",
+            "change_type": "renamed",
             "symbol_old": "oldMethod",
             "symbol_new": "newMethod",
             "description": "renamed function",

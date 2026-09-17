@@ -44,17 +44,8 @@ export default function DashboardOverview() {
     }
   };
 
-  const switchTab = async (tab: "personal" | "benchmark") => {
+  const switchTab = (tab: "personal" | "benchmark") => {
     setActiveTab(tab);
-    if (tab === "benchmark" && !repos.some((r) => r.category === "benchmark")) {
-      try {
-        const { getRepos } = await import("@/lib/api");
-        const benchmarks = await getRepos(false, true);
-        if (benchmarks) {
-          setRepos(benchmarks as (Repo & { category?: string })[]);
-        }
-      } catch {}
-    }
   };
 
   useEffect(() => {
@@ -215,8 +206,8 @@ export default function DashboardOverview() {
             Retry Connection
           </button>
         </SpotlightCard>
-      ) : repos.length === 0 ? (
-        /* State 2: Empty State (0 repos connected) */
+      ) : displayedRepos.length === 0 ? (
+        /* State 2: Empty State (0 repos in current view) */
         <SpotlightCard
           spotlightColor="rgba(255, 255, 255, 0.08)"
           className="p-8 sm:p-12 bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl flex flex-col items-center text-center gap-6 shadow-2xl"
@@ -228,28 +219,65 @@ export default function DashboardOverview() {
             </svg>
           </div>
 
+          {/* Interactive tab switcher so user can toggle between tabs even when empty */}
+          <div className="flex items-center p-1 rounded-lg bg-white/5 border border-white/10">
+            <button
+              onClick={() => switchTab("personal")}
+              className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
+                activeTab === "personal"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-[#71717A] hover:text-white"
+              }`}
+            >
+              My Repositories
+            </button>
+            <button
+              onClick={() => switchTab("benchmark")}
+              className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
+                activeTab === "benchmark"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-[#71717A] hover:text-white"
+              }`}
+            >
+              Industry Benchmarks
+            </button>
+          </div>
+
           <div className="flex flex-col gap-2 max-w-lg">
             <h2 className="font-mono font-bold text-xl text-white">
-              Connect your first repository
+              {activeTab === "benchmark"
+                ? "No benchmark repositories found"
+                : "Connect your first repository"}
             </h2>
             <p className="font-sans text-xs sm:text-sm text-[#A1A1AA] leading-relaxed">
-              Install the Telex GitHub App to monitor your repositories. Whenever an upstream dependency ships a breaking release, Telex parses call sites with Tree-Sitter, generates verified fixes, and opens ready-to-merge pull requests.
+              {activeTab === "benchmark"
+                ? "No benchmark targets are currently available. Switch to My Repositories to view your active codebases."
+                : "Install the Telex GitHub App to monitor your repositories. Whenever an upstream dependency ships a breaking release, Telex parses call sites with Tree-Sitter, generates verified fixes, and opens ready-to-merge pull requests."}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <a
-              href={githubInstallUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-lg hover:shadow-white/10"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>Connect Repository via GitHub App</span>
-            </a>
+            {activeTab === "personal" ? (
+              <a
+                href={githubInstallUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-lg hover:shadow-white/10"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Connect Repository via GitHub App</span>
+              </a>
+            ) : (
+              <button
+                onClick={() => switchTab("personal")}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-lg hover:shadow-white/10"
+              >
+                <span>← View My Repositories</span>
+              </button>
+            )}
             <Link
               href="/dashboard/activity"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/20 bg-white/5 text-white font-mono text-xs hover:bg-white/10 transition-colors"
@@ -283,7 +311,7 @@ export default function DashboardOverview() {
                 Active Targets
               </span>
               <div className="flex items-baseline gap-1.5">
-                <span className="font-mono font-bold text-2xl text-white">{repos.length}</span>
+                <span className="font-mono font-bold text-2xl text-white">{displayedRepos.length}</span>
                 <span className="font-mono text-[10px] text-[#A1A1AA]">monitored</span>
               </div>
             </div>

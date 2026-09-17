@@ -3,15 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import TelexLogo from "@/components/ui/TelexLogo";
+import { getApiUrl } from "@/lib/api";
 
 const NAV_LINKS = [
   { href: "#how-it-works", label: "01 // Pipeline" },
   { href: "/dashboard", label: "02 // Dashboard" },
 ];
-
-function getApiUrl(): string {
-  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-}
 
 export default function Nav() {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -19,19 +16,7 @@ export default function Nav() {
 
   useEffect(() => {
     const apiUrl = getApiUrl();
-    const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
-    const localUser = typeof window !== "undefined" ? localStorage.getItem("telex_user") : null;
-
-    if (localUser) {
-      setUser(localUser);
-    }
-
-    const headers: Record<string, string> = {};
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    fetch(`${apiUrl}/api/auth/me`, { credentials: "include", headers })
+    fetch(`${apiUrl}/api/auth/me`, { credentials: "include" })
       .then((res) => {
         if (!res.ok) throw new Error("Auth check failed");
         return res.json();
@@ -39,13 +24,12 @@ export default function Nav() {
       .then((data) => {
         if (data.authenticated && data.user?.github_login) {
           setUser(data.user.github_login);
-          localStorage.setItem("telex_user", data.user.github_login);
-        } else if (!data.authenticated && !localUser) {
+        } else {
           setUser(null);
         }
       })
       .catch(() => {
-        // Auth check failed silently — keep localUser if cached
+        setUser(null);
       });
   }, []);
 
@@ -54,7 +38,7 @@ export default function Nav() {
     if (user) {
       window.location.href = "/dashboard";
     } else {
-      window.location.href = `${apiUrl}/api/auth/dev-login`;
+      window.location.href = `${apiUrl}/api/auth/github`;
     }
   };
 

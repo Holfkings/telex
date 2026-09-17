@@ -300,17 +300,32 @@ async def sync_github_app_repositories_async() -> None:
                     session.add(db_inst)
                     await session.flush()
 
-                async with httpx.AsyncClient(timeout=10.0) as client:
-                    resp = await client.get(
-                        "https://api.github.com/installation/repositories",
-                        headers={
-                            "Authorization": f"Bearer {token}",
-                            "Accept": "application/vnd.github+json",
-                            "User-Agent": "Telex-Autonomous-Agent",
-                        },
-                    )
-                    if resp.status_code == 200:
-                        gh_repos = resp.json().get("repositories", [])
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    gh_repos = []
+                    page = 1
+                    while True:
+                        resp = await client.get(
+                            "https://api.github.com/installation/repositories",
+                            params={"per_page": 100, "page": page},
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Accept": "application/vnd.github+json",
+                                "User-Agent": "Telex-Autonomous-Agent",
+                            },
+                        )
+                        if resp.status_code != 200:
+                            # If the first page succeeded, we still process gathered repos
+                            break
+                        data = resp.json()
+                        page_repos = data.get("repositories", [])
+                        gh_repos.extend(page_repos)
+                        total_count = data.get("total_count", len(gh_repos))
+                        # Stop fetching when all repositories are retrieved or no more returned
+                        if not page_repos or len(gh_repos) >= total_count:
+                            break
+                        page += 1
+
+                    if gh_repos:
                         active_gh_ids = set()
                         for gr in gh_repos:
                             active_gh_ids.add(gr["id"])
@@ -319,6 +334,7 @@ async def sync_github_app_repositories_async() -> None:
                             )
                             db_repo = r_res.scalar_one_or_none()
                             if db_repo:
+                                db_repo.installation_id = db_inst.id
                                 db_repo.is_active = True
                                 db_repo.full_name = gr["full_name"]
                                 db_repo.default_branch = gr.get("default_branch", "main")

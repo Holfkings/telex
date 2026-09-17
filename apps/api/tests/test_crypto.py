@@ -11,7 +11,7 @@ from services.crypto import encrypt_key, decrypt_key, _get_master_key
 
 def test_encrypt_and_decrypt_roundtrip():
     """Verify that encrypting and decrypting restores the original plaintext."""
-    plaintext = "sk-test-sample-secret-api-key-12345"
+    plaintext = "test-sample-secret-api-key-12345"
     encrypted = encrypt_key(plaintext)
     assert encrypted != plaintext
     assert isinstance(encrypted, str)

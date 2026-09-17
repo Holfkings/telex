@@ -1,11 +1,12 @@
 "use client";
 
 import IllocaButton from "@/components/ui/IllocaButton";
+import { getApiUrl } from "@/lib/api";
 
 export default function FreeStrip() {
   const handleInstall = () => {
-    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
-    window.location.href = `${apiUrl}/api/auth/dev-login`;
+    const apiUrl = getApiUrl();
+    window.location.href = `${apiUrl}/api/auth/github?next=install`;
   };
 
   return (

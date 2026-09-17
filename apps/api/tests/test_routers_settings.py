@@ -102,7 +102,7 @@ async def test_store_api_key_demo_user_rejected():
         async with AsyncClient(transport=transport, base_url="http://test") as client:
             resp = await client.post(
                 "/api/settings/api-keys",
-                json={"provider": "openai", "key": "sk-1234567890"},
+                json={"provider": "openai", "key": "test-mock-secret-key-12345"},
             )
             assert resp.status_code == 403
             assert "Demo accounts cannot" in resp.json()["detail"]
@@ -162,7 +162,7 @@ async def test_store_api_key_success():
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 resp = await client.post(
                     "/api/settings/api-keys",
-                    json={"provider": "openai", "key": "sk-real-test-token-1234"},
+                    json={"provider": "openai", "key": "test-mock-real-token-1234"},
                 )
                 assert resp.status_code == 201
                 data = resp.json()

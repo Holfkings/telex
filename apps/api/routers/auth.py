@@ -7,7 +7,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from urllib.parse import urlencode, urlparse
+from urllib.parse import quote, urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -236,18 +236,16 @@ async def github_callback(code: str, request: Request, state: str | None = None)
         user_id_str = str(user.id)
 
     # ── Build redirect response with session cookie ──────────────────────────
-    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "http://localhost:3000"
+    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "https://telex-pi.vercel.app"
 
     session_token = create_session_token(user_id_str)
 
     if next_url == "install":
         redirect_url = f"https://github.com/apps/{settings.github_app_slug}/installations/new"
     elif next_url and is_safe_redirect(next_url):
-        full_next = f"{web_base}{next_url}" if next_url.startswith("/") else next_url
-        sep = "&" if "?" in full_next else "?"
-        redirect_url = f"{full_next}{sep}login={user_login}&token={session_token}"
+        redirect_url = f"{web_base}{next_url}" if next_url.startswith("/") else next_url
     else:
-        redirect_url = f"{web_base}/dashboard?login={user_login}&token={session_token}"
+        redirect_url = f"{web_base}/dashboard"
 
     response = RedirectResponse(url=redirect_url)
     # Clear the CSRF nonce — single-use
@@ -256,6 +254,7 @@ async def github_callback(code: str, request: Request, state: str | None = None)
     is_prod = bool(os.getenv("RENDER") or settings.environment == "production")
     is_secure = request.url.scheme == "https" or is_prod
     same_site_val = "none" if is_secure else "lax"
+    safe_login_cookie = quote(user_login or "", safe="")
 
     # Set signed session token containing user id
     response.set_cookie(
@@ -269,7 +268,7 @@ async def github_callback(code: str, request: Request, state: str | None = None)
     # Set display cookie for client UI
     response.set_cookie(
         key="telex_user",
-        value=user_login,
+        value=safe_login_cookie,
         max_age=60 * 60 * 24 * 30,
         httponly=False,
         secure=is_secure,
@@ -318,7 +317,7 @@ async def get_current_user(request: Request):
 @router.get("/logout")
 async def logout(request: Request):
     """Clear session cookie and redirect to home."""
-    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "http://localhost:3000"
+    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "https://telex-pi.vercel.app"
     response = RedirectResponse(url=f"{web_base}/")
     response.delete_cookie(key="telex_session")
     response.delete_cookie(key="telex_user")
@@ -353,7 +352,8 @@ async def dev_login(request: Request, login: str = "kesavaraja67"):
 
     session_token = create_session_token(user_id_str)
     web_base = os.getenv("WEB_APP_URL", "http://localhost:3000")
-    redirect_url = f"{web_base}/dashboard?login={login}&token={session_token}"
+    redirect_url = f"{web_base}/dashboard"
+    safe_login = quote(login or "", safe="")
     response = RedirectResponse(url=redirect_url, status_code=303)
     response.set_cookie(
         key="telex_session",
@@ -365,7 +365,7 @@ async def dev_login(request: Request, login: str = "kesavaraja67"):
     )
     response.set_cookie(
         key="telex_user",
-        value=login,
+        value=safe_login,
         max_age=60 * 60 * 24 * 30,
         httponly=False,
         secure=False,

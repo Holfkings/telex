@@ -2,18 +2,21 @@
  * Typed API client for the FastAPI backend.
  */
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+export const API_BASE =
+  process.env.NEXT_PUBLIC_API_URL ||
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:8000"
+    : "https://telex-api.onrender.com");
+
+export function getApiUrl(): string {
+  return API_BASE;
+}
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
   const reqHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options?.headers as Record<string, string>) ?? {}),
   };
-
-  if (token && !reqHeaders["Authorization"]) {
-    reqHeaders["Authorization"] = `Bearer ${token}`;
-  }
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,

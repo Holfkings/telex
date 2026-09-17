@@ -32,18 +32,19 @@ Accepted formats:
 
 ---
 
-## 🧪 Test Coverage
-<!-- Confirm that backend test coverage meets or exceeds the 80% threshold -->
-- [ ] Added / updated automated tests covering the changes.
-- [ ] Test coverage meets or exceeds **80%** (`pytest --cov=. --cov-fail-under=80`).
+## 🧪 Test Coverage & Verification
+<!-- Confirm that appropriate tests were written and coverage exceeds 80% -->
+- [ ] **Appropriate Tests**: Wrote comprehensive unit/integration tests for all added or modified logic.
+- [ ] **Coverage Above 80%**: Ran backend tests locally; coverage strictly exceeds **80%** (`pytest --cov=. --cov-fail-under=80`).
 
 ---
 
 ## 📋 Quality & Contribution Checklist
-- [ ] **Issue Assignment**: I asked to be assigned and was officially assigned to the related issue before opening this PR.
-- [ ] **Simple English Comments**: All code comments and docstrings are written in simple, clear, and direct English.
-- [ ] **Professional Communication**: PR description and any discussion adhere to professional, respectful standards.
-- [ ] **Python Formatting & Linting**: Ran `ruff check --fix .` and `black .` in `apps/api` with zero violations.
+- [ ] **Issue Assignment**: I requested assignment and was formally assigned to this issue before starting work.
+- [ ] **No Force Pushes or Rebasing**: I have **NOT** force pushed (`git push --force`) or rebased this PR branch after opening it.
+- [ ] **Professional Conversation Only**: All communications in this PR, commits, and discussions are polite, constructive, and professional.
+- [ ] **Simple English Comments**: All code comments and docstrings are written strictly in **simple, plain English**.
+- [ ] **Python Formatting & Linting**: Code passes `black .` formatting and `ruff check --fix .` linting in `apps/api`.
 - [ ] **Frontend Validation**: Ran `npx tsc --noEmit` and `npm run lint` in `apps/web` with zero errors.
-- [ ] **No Secrets Committed**: Checked that no API keys, private tokens, or credentials are leaked in the diff.
-- [ ] **Clean Git History**: Commits follow Conventional Commits standard (`feat:`, `fix:`, `docs:`).
+- [ ] **No Secrets Committed**: Verified that no secrets, credentials, or production tokens are exposed.
+- [ ] **Clean Commits**: Commit messages follow Conventional Commits standard (`feat:`, `fix:`, `docs:`).

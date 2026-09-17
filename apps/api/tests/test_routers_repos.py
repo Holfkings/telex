@@ -86,7 +86,14 @@ async def test_sync_repos_endpoint():
         with patch("routers.repos.get_core_repositories_async", AsyncMock(return_value=[])):
             transport = ASGITransport(app=app)
             async with AsyncClient(transport=transport, base_url="http://test") as client:
-                resp = await client.post("/api/repos/sync")
+                # Unauthenticated request should be rejected with 401
+                unauth_resp = await client.post("/api/repos/sync")
+                assert unauth_resp.status_code == 401
+
+                # Authenticated request with demo key succeeds
+                resp = await client.post(
+                    "/api/repos/sync", headers={"X-Demo-Key": "telex_demo_secret_2026"}
+                )
                 assert resp.status_code == 200
                 assert resp.json() == []
 

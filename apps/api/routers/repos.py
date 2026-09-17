@@ -28,14 +28,12 @@ from services.repo_service import (
 router = APIRouter(prefix="/api/repos", tags=["repos"])
 
 
-@router.post("/sync", response_model=list[RepoOut])
-@router.get("/sync", response_model=list[RepoOut])
+@router.post("/sync", response_model=list[RepoOut], dependencies=[Depends(require_auth)])
+@router.get("/sync", response_model=list[RepoOut], dependencies=[Depends(require_auth)])
 async def sync_repos(include_benchmarks: bool = False):
     """Immediately syncs repositories from GitHub App installations and returns the active repos."""
     await sync_github_app_repositories_async()
-    repos = await get_core_repositories_async(
-        force_sync=True, include_benchmarks=include_benchmarks
-    )
+    repos = await get_core_repositories_async(include_benchmarks=include_benchmarks)
     return repos
 
 
