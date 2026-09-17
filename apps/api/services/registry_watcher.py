@@ -1,9 +1,9 @@
 """
 npm registry watcher — polls for new versions of tracked packages.
 """
+
 import logging
 from datetime import datetime
-from typing import Optional
 from urllib.parse import quote
 
 import httpx
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 NPM_REGISTRY = "https://registry.npmjs.org"
 
 
-async def fetch_latest_version(package_name: str) -> Optional[dict]:
+async def fetch_latest_version(package_name: str) -> dict | None:
     """
     Fetch the latest version metadata for an npm package.
 
@@ -44,8 +44,11 @@ async def fetch_latest_version(package_name: str) -> Optional[dict]:
             return {
                 "version": latest_version,
                 "published_at": published_at,
-                "changelog_url": version_data.get("homepage") or (
-                    version_data.get("repository", {}).get("url") if isinstance(version_data.get("repository"), dict) else None
+                "changelog_url": version_data.get("homepage")
+                or (
+                    version_data.get("repository", {}).get("url")
+                    if isinstance(version_data.get("repository"), dict)
+                    else None
                 ),
             }
     except Exception as exc:

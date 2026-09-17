@@ -18,14 +18,13 @@ Provider name → class mapping:
   together  → TogetherProvider  (llama-3.3-70B-Instruct-Turbo default)
   nemotron  → NemotronProvider  (nvidia/llama-3.1-nemotron-70b-instruct default)
 """
-from typing import Optional
 
 from .base import PatchProvider
 
 
 def get_patch_provider(
-    name: Optional[str] = None,
-    api_key: Optional[str] = None,
+    name: str | None = None,
+    api_key: str | None = None,
 ) -> PatchProvider:
     """
     Factory for PatchProvider instances.
@@ -45,16 +44,19 @@ def get_patch_provider(
 
     if provider_name == "gemini":
         from .gemini import GeminiProvider
+
         key = api_key or settings.gemini_api_key
         return GeminiProvider(key)
 
     if provider_name in ("claude", "anthropic"):
         from .claude import ClaudeProvider
+
         key = api_key or settings.anthropic_api_key
         return ClaudeProvider(key)
 
     if provider_name == "openai":
         from .openai_provider import OpenAIProvider
+
         if not api_key:
             raise RuntimeError(
                 "OpenAI is a BYOK-only provider — no platform key is configured. "
@@ -64,6 +66,7 @@ def get_patch_provider(
 
     if provider_name == "mistral":
         from .mistral_provider import MistralProvider
+
         if not api_key:
             raise RuntimeError(
                 "Mistral is a BYOK-only provider — add your key in Settings → API Keys."
@@ -72,6 +75,7 @@ def get_patch_provider(
 
     if provider_name == "groq":
         from .groq_provider import GroqProvider
+
         if not api_key:
             raise RuntimeError(
                 "Groq is a BYOK-only provider — add your key in Settings → API Keys."
@@ -80,6 +84,7 @@ def get_patch_provider(
 
     if provider_name == "cohere":
         from .extra_providers import CohereProvider
+
         if not api_key:
             raise RuntimeError(
                 "Cohere is a BYOK-only provider — add your key in Settings → API Keys."
@@ -88,14 +93,14 @@ def get_patch_provider(
 
     if provider_name in ("xai", "grok"):
         from .extra_providers import XAIProvider
+
         if not api_key:
-            raise RuntimeError(
-                "xAI is a BYOK-only provider — add your key in Settings → API Keys."
-            )
+            raise RuntimeError("xAI is a BYOK-only provider — add your key in Settings → API Keys.")
         return XAIProvider(api_key)
 
     if provider_name == "deepseek":
         from .extra_providers import DeepSeekProvider
+
         if not api_key:
             raise RuntimeError(
                 "DeepSeek is a BYOK-only provider — add your key in Settings → API Keys."
@@ -104,6 +109,7 @@ def get_patch_provider(
 
     if provider_name == "together":
         from .extra_providers import TogetherProvider
+
         if not api_key:
             raise RuntimeError(
                 "Together AI is a BYOK-only provider — add your key in Settings → API Keys."
@@ -112,6 +118,7 @@ def get_patch_provider(
 
     if provider_name == "nemotron":
         from .extra_providers import NemotronProvider
+
         if not api_key:
             raise RuntimeError(
                 "Nemotron is a BYOK-only provider — add your key in Settings → API Keys."
@@ -127,7 +134,7 @@ def get_patch_provider(
 
 async def get_patch_provider_for_user(
     user_id: str,
-    preferred_provider: Optional[str] = None,
+    preferred_provider: str | None = None,
 ) -> PatchProvider:
     """
     BYOK-aware provider factory.
@@ -141,11 +148,13 @@ async def get_patch_provider_for_user(
         preferred_provider: Provider name to try first. Falls back to 'gemini'.
     """
     import uuid as uuid_module
+
     from sqlalchemy import select
-    from db.session import AsyncSessionLocal
-    from db.models import UserApiKey
-    from services.crypto import decrypt_key
+
     from config import settings
+    from db.models import UserApiKey
+    from db.session import AsyncSessionLocal
+    from services.crypto import decrypt_key
 
     provider_name = (preferred_provider or settings.llm_provider_default).lower().strip()
 
@@ -168,6 +177,7 @@ async def get_patch_provider_for_user(
             plaintext_key = decrypt_key(row.encrypted_key)
             # Update last_used_at
             from datetime import datetime, timezone
+
             row.last_used_at = datetime.now(timezone.utc)
             await session.commit()
             return get_patch_provider(provider_name, api_key=plaintext_key)

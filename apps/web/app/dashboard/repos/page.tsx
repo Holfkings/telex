@@ -10,6 +10,8 @@ import type { Repo } from "@/lib/api";
 export default function ReposPage() {
   const [repos, setRepos] = useState<Repo[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [toggleErrors, setToggleErrors] = useState<Record<string, string>>({});
 
@@ -17,15 +19,34 @@ export default function ReposPage() {
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "telex-agent-dev"
   }/installations/new`;
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { syncRepos } = await import("@/lib/api");
+      const updated = await syncRepos(false);
+      if (updated) {
+        const connected = updated.filter((r) => (r as any).category !== "benchmark");
+        setRepos(connected);
+        setSyncNotice(`Synced ${connected.length} personal repositories from GitHub App`);
+        setTimeout(() => setSyncNotice(null), 4000);
+      }
+    } catch {
+      // Keep existing repos
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    async function loadRepos() {
+    async function loadRepos(forceSync: boolean = false) {
       try {
         const { getRepos } = await import("@/lib/api");
-        const data = await getRepos();
+        const data = await getRepos(forceSync, false);
         if (isMounted && data) {
-          setRepos(data);
+          const connected = data.filter((r) => (r as any).category !== "benchmark");
+          setRepos(connected);
         }
       } catch {
         // Keep current state
@@ -34,9 +55,16 @@ export default function ReposPage() {
       }
     }
 
-    loadRepos();
+    loadRepos(true);
+    const timer = setInterval(() => loadRepos(false), 8000);
+
+    const onFocus = () => loadRepos(true);
+    window.addEventListener("focus", onFocus);
+
     return () => {
       isMounted = false;
+      clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
     };
   }, []);
 
@@ -99,8 +127,24 @@ export default function ReposPage() {
           </p>
         </div>
 
-        {/* Action: Connect More Repos */}
+        {/* Action: Connect More Repos & Sync */}
         <div className="flex items-center gap-3 self-start sm:self-center">
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-white/20 bg-white/[0.04] text-white hover:bg-white/[0.08] hover:border-white font-mono text-xs transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-white" : "text-[#A1A1AA]"}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{isSyncing ? "Syncing..." : "Sync Repos"}</span>
+          </button>
+
           <a
             href={githubInstallUrl}
             target="_blank"
@@ -115,6 +159,18 @@ export default function ReposPage() {
           </a>
         </div>
       </div>
+
+      {syncNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="px-4 py-2.5 rounded-xl bg-white/[0.08] border border-white/20 text-white font-mono text-xs flex items-center gap-2.5"
+        >
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#FFFFFF]" />
+          <span>{syncNotice}</span>
+        </motion.div>
+      )}
 
       {/* State 1: Loading Skeleton */}
       {isLoading ? (

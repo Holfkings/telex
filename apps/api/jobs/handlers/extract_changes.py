@@ -9,6 +9,7 @@ Payload shape:
         "changelog": "..."        # optional — if omitted, fetched from npm
     }
 """
+
 import logging
 import uuid
 
@@ -16,11 +17,12 @@ logger = logging.getLogger(__name__)
 
 
 async def run(payload: dict) -> None:
-    from db.session import AsyncSessionLocal
-    from db.models import PackageVersion, DetectedChange, RepoPackage, Package
-    from services.change_extractor import extract_breaking_changes
-    from jobs.queue import enqueue_job
     from sqlalchemy import select
+
+    from db.models import DetectedChange, PackageVersion, RepoPackage
+    from db.session import AsyncSessionLocal
+    from jobs.queue import enqueue_job
+    from services.change_extractor import extract_breaking_changes
 
     package_version_id = uuid.UUID(payload["package_version_id"])
     package_name = payload["package_name"]
@@ -46,7 +48,9 @@ async def run(payload: dict) -> None:
         )
 
         if not changes:
-            logger.info("extract_changes: no breaking changes found in %s@%s", package_name, pv.version)
+            logger.info(
+                "extract_changes: no breaking changes found in %s@%s", package_name, pv.version
+            )
             pv.scanned_at = __import__("datetime").datetime.utcnow()
             await session.commit()
             return
@@ -67,6 +71,7 @@ async def run(payload: dict) -> None:
         pv_version = pv.version
 
         from datetime import datetime, timezone
+
         pv.scanned_at = datetime.now(timezone.utc)
         await session.commit()
 
@@ -84,4 +89,6 @@ async def run(payload: dict) -> None:
                 },
             )
 
-    logger.info("extract_changes: stored %d changes for %s@%s", len(changes), package_name, pv_version)
+    logger.info(
+        "extract_changes: stored %d changes for %s@%s", len(changes), package_name, pv_version
+    )

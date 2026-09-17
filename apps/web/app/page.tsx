@@ -44,7 +44,7 @@ export default function LandingPage() {
             {[
               { label: "GITHUB", href: "https://github.com/Kesavaraja67/telex" },
               { label: "DASHBOARD", href: "/dashboard" },
-              { label: "STATUS", href: "https://telex-api.onrender.com/health" },
+              { label: "STATUS", href: "http://localhost:8000/health" },
             ].map((link) =>
               link.href.startsWith("/") ? (
                 <Link

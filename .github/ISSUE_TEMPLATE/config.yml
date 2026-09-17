@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: GitHub Discussions
+    url: https://github.com/Kesavaraja67/telex/discussions
+    about: Ask questions, discuss ideas, and connect with the community.
+  - name: Security Vulnerabilities
+    url: https://github.com/Kesavaraja67/telex/security/policy
+    about: Report security issues privately per our security policy.

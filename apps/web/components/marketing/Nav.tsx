@@ -10,12 +10,7 @@ const NAV_LINKS = [
 ];
 
 function getApiUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_URL ||
-    (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-      ? "https://telex-api.onrender.com"
-      : "http://localhost:8000")
-  );
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
 export default function Nav() {
@@ -24,16 +19,33 @@ export default function Nav() {
 
   useEffect(() => {
     const apiUrl = getApiUrl();
+    const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
+    const localUser = typeof window !== "undefined" ? localStorage.getItem("telex_user") : null;
 
-    fetch(`${apiUrl}/api/auth/me`, { credentials: "include" })
-      .then((res) => res.json())
+    if (localUser) {
+      setUser(localUser);
+    }
+
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+
+    fetch(`${apiUrl}/api/auth/me`, { credentials: "include", headers })
+      .then((res) => {
+        if (!res.ok) throw new Error("Auth check failed");
+        return res.json();
+      })
       .then((data) => {
         if (data.authenticated && data.user?.github_login) {
           setUser(data.user.github_login);
+          localStorage.setItem("telex_user", data.user.github_login);
+        } else if (!data.authenticated && !localUser) {
+          setUser(null);
         }
       })
       .catch(() => {
-        // Auth check failed silently — treat as logged out, no error UI needed here.
+        // Auth check failed silently — keep localUser if cached
       });
   }, []);
 
@@ -42,7 +54,7 @@ export default function Nav() {
     if (user) {
       window.location.href = "/dashboard";
     } else {
-      window.location.href = `${apiUrl}/api/auth/github`;
+      window.location.href = `${apiUrl}/api/auth/dev-login`;
     }
   };
 

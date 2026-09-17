@@ -9,6 +9,7 @@ from consuming memory inside the 512 MB API container.
 Usage:
     python worker.py
 """
+
 import asyncio
 import logging
 import uuid
@@ -21,7 +22,7 @@ logger = logging.getLogger("telex.worker")
 
 
 async def main() -> None:
-    from jobs.worker import worker_loop, start_scheduler
+    from jobs.worker import start_scheduler, worker_loop
 
     worker_id = f"worker-standalone-{uuid.uuid4().hex[:8]}"
     logger.info("Telex standalone worker starting — id: %s", worker_id)

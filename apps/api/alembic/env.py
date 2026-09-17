@@ -17,6 +17,7 @@ if config.config_file_name is not None:
 
 # Import models so autogenerate can see all tables
 import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from db.models import Base  # noqa: E402

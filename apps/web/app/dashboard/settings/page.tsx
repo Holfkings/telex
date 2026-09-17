@@ -90,18 +90,17 @@ interface ApiKeyStatus {
 // ── API helpers ──────────────────────────────────────────────────────────────
 function getApiBase(): string {
   if (typeof window === "undefined") return "";
-  return (
-    process.env.NEXT_PUBLIC_API_URL ||
-    (window.location.hostname !== "localhost" &&
-      window.location.hostname !== "127.0.0.1"
-      ? "https://telex-api.onrender.com"
-      : "http://localhost:8000")
-  );
+  return process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 }
 
 async function fetchKeys(): Promise<ApiKeyStatus[]> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(`${getApiBase()}/api/settings/api-keys`, {
     credentials: "include",
+    headers,
   });
   if (!res.ok) {
     throw new Error(`Failed to load API keys (${res.status} ${res.statusText})`);
@@ -111,19 +110,27 @@ async function fetchKeys(): Promise<ApiKeyStatus[]> {
 }
 
 async function saveKey(provider: string, key: string): Promise<boolean> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
+  const headers: Record<string, string> = { "Content-Type": "application/json" };
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(`${getApiBase()}/api/settings/api-keys`, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers,
     body: JSON.stringify({ provider, key }),
   });
   return res.ok;
 }
 
 async function removeKey(provider: string): Promise<boolean> {
+  const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
+  const headers: Record<string, string> = {};
+  if (token) headers["Authorization"] = `Bearer ${token}`;
+
   const res = await fetch(
     `${getApiBase()}/api/settings/api-keys/${provider}`,
-    { method: "DELETE", credentials: "include" }
+    { method: "DELETE", credentials: "include", headers }
   );
   return res.ok;
 }

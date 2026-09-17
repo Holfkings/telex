@@ -1,21 +1,23 @@
 """
 GitHub OAuth callback — creates/updates users row and manages authentication sessions.
 """
+
 import logging
+import os
 import secrets
 import uuid
-from typing import Optional
+from datetime import datetime, timedelta, timezone
 from urllib.parse import urlencode, urlparse
 
-from fastapi import APIRouter, Request, HTTPException, Query
-from fastapi.responses import RedirectResponse
 import httpx
-from jose import jwt, JWTError
-
-from db.session import AsyncSessionLocal
-from db.models import User
-from config import settings
+from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import RedirectResponse
+from jose import JWTError, jwt
 from sqlalchemy import select
+
+from config import settings
+from db.models import User
+from db.session import AsyncSessionLocal
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -36,6 +38,7 @@ JWT_ALGORITHM = "HS256"
 #
 # Payment-facing endpoints (create-order, verify-signature, webhook) must
 # remain open because Aura Drops customers are anonymous.
+
 
 async def require_auth(request: Request) -> dict:
     """
@@ -68,9 +71,6 @@ async def require_auth(request: Request) -> dict:
     return {"user_id": user_id_str}
 
 
-
-from datetime import datetime, timedelta, timezone
-
 def _get_jwt_secret() -> str:
     if not settings.nextauth_secret:
         raise RuntimeError("NEXTAUTH_SECRET is not configured")
@@ -87,7 +87,7 @@ def create_session_token(user_id: str) -> str:
     return jwt.encode(payload, _get_jwt_secret(), algorithm=JWT_ALGORITHM)
 
 
-def decode_session_token(token: str) -> Optional[str]:
+def decode_session_token(token: str) -> str | None:
     try:
         payload = jwt.decode(token, _get_jwt_secret(), algorithms=[JWT_ALGORITHM])
         return payload.get("sub")
@@ -106,7 +106,11 @@ def is_safe_redirect(url_str: str) -> bool:
         if parsed.scheme not in ("http", "https"):
             return False
         netloc = parsed.netloc.lower()
-        if netloc.startswith("localhost:") or netloc == "localhost" or netloc.startswith("127.0.0.1:"):
+        if (
+            netloc.startswith("localhost:")
+            or netloc == "localhost"
+            or netloc.startswith("127.0.0.1:")
+        ):
             return True
         for allowed in settings.cors_origins:
             allowed_netloc = urlparse(allowed).netloc.lower()
@@ -118,7 +122,7 @@ def is_safe_redirect(url_str: str) -> bool:
 
 
 @router.get("/github")
-async def github_login(next_url: Optional[str] = Query(None, alias="next")):
+async def github_login(request: Request, next_url: str | None = Query(None, alias="next")):
     """Redirect the user to GitHub OAuth with optional post-login redirect state."""
     # Generate a CSRF nonce; store in cookie and embed in state
     nonce = secrets.token_urlsafe(24)
@@ -130,11 +134,16 @@ async def github_login(next_url: Optional[str] = Query(None, alias="next")):
         }
     )
     response = RedirectResponse(f"https://github.com/login/oauth/authorize?{query}")
+    import os
+
+    is_secure = request.url.scheme == "https" or bool(
+        os.getenv("RENDER") or settings.environment == "production"
+    )
     response.set_cookie(
         "telex_oauth_state",
         nonce,
         httponly=True,
-        secure=True,
+        secure=is_secure,
         samesite="lax",
         max_age=600,  # 10-minute window for the OAuth flow
     )
@@ -143,7 +152,7 @@ async def github_login(next_url: Optional[str] = Query(None, alias="next")):
 
 @router.get("/github/callback")
 @router.get("/callback/github")
-async def github_callback(code: str, request: Request, state: Optional[str] = None):
+async def github_callback(code: str, request: Request, state: str | None = None):
     """
     Exchange OAuth code for token, upsert user in database,
     set session cookie, and redirect to destination.
@@ -155,7 +164,9 @@ async def github_callback(code: str, request: Request, state: Optional[str] = No
 
     if stored_nonce and nonce_from_state:
         if not secrets.compare_digest(stored_nonce, nonce_from_state):
-            raise HTTPException(status_code=400, detail="Invalid OAuth state — possible CSRF attack")
+            raise HTTPException(
+                status_code=400, detail="Invalid OAuth state — possible CSRF attack"
+            )
 
     # ── Exchange code for access token ───────────────────────────────────────
     try:
@@ -202,9 +213,7 @@ async def github_callback(code: str, request: Request, state: Optional[str] = No
 
     # ── Upsert user in database ──────────────────────────────────────────────
     async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(User).where(User.github_id == github_id).limit(1)
-        )
+        result = await session.execute(select(User).where(User.github_id == github_id).limit(1))
         user = result.scalar_one_or_none()
 
         if user is None:
@@ -227,31 +236,35 @@ async def github_callback(code: str, request: Request, state: Optional[str] = No
         user_id_str = str(user.id)
 
     # ── Build redirect response with session cookie ──────────────────────────
-    import os
-    web_base = settings.web_app_url if settings.web_app_url and settings.web_app_url != "http://localhost:3000" else (
-        "https://telex-pi.vercel.app" if os.getenv("RENDER") or os.getenv("ENVIRONMENT") == "production" else "http://localhost:3000"
-    )
+    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "http://localhost:3000"
+
+    session_token = create_session_token(user_id_str)
 
     if next_url == "install":
         redirect_url = f"https://github.com/apps/{settings.github_app_slug}/installations/new"
     elif next_url and is_safe_redirect(next_url):
-        redirect_url = next_url
+        full_next = f"{web_base}{next_url}" if next_url.startswith("/") else next_url
+        sep = "&" if "?" in full_next else "?"
+        redirect_url = f"{full_next}{sep}login={user_login}&token={session_token}"
     else:
-        redirect_url = f"{web_base}/dashboard?login={user_login}"
+        redirect_url = f"{web_base}/dashboard?login={user_login}&token={session_token}"
 
     response = RedirectResponse(url=redirect_url)
     # Clear the CSRF nonce — single-use
     response.delete_cookie("telex_oauth_state")
 
-    # Set signed, httponly session token containing user id
-    session_token = create_session_token(user_id_str)
+    is_prod = bool(os.getenv("RENDER") or settings.environment == "production")
+    is_secure = request.url.scheme == "https" or is_prod
+    same_site_val = "none" if is_secure else "lax"
+
+    # Set signed session token containing user id
     response.set_cookie(
         key="telex_session",
         value=session_token,
         max_age=60 * 60 * 24 * 30,  # 30 days
         httponly=True,
-        secure=True,
-        samesite="none",
+        secure=is_secure,
+        samesite=same_site_val,
     )
     # Set display cookie for client UI
     response.set_cookie(
@@ -259,16 +272,21 @@ async def github_callback(code: str, request: Request, state: Optional[str] = No
         value=user_login,
         max_age=60 * 60 * 24 * 30,
         httponly=False,
-        secure=True,
-        samesite="none",
+        secure=is_secure,
+        samesite=same_site_val,
     )
     return response
 
 
 @router.get("/me")
 async def get_current_user(request: Request):
-    """Return the currently authenticated user based on signed session cookie."""
+    """Return the currently authenticated user based on signed session cookie or Bearer header."""
     token = request.cookies.get("telex_session")
+    if not token:
+        auth_header = request.headers.get("Authorization")
+        if auth_header and auth_header.startswith("Bearer "):
+            token = auth_header.split(" ", 1)[1].strip()
+
     if not token:
         return {"authenticated": False, "user": None}
 
@@ -298,11 +316,61 @@ async def get_current_user(request: Request):
 
 
 @router.get("/logout")
-async def logout():
+async def logout(request: Request):
     """Clear session cookie and redirect to home."""
-    response = RedirectResponse(url=f"{settings.web_app_url}/")
+    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "http://localhost:3000"
+    response = RedirectResponse(url=f"{web_base}/")
     response.delete_cookie(key="telex_session")
     response.delete_cookie(key="telex_user")
+    return response
+
+
+@router.get("/dev-login")
+@router.post("/dev-login")
+async def dev_login(request: Request, login: str = "kesavaraja67"):
+    """Development-only bypass to quickly sign in locally without GitHub roundtrip."""
+    import os
+
+    is_prod = bool(os.getenv("RENDER") or settings.environment == "production")
+    if is_prod:
+        raise HTTPException(status_code=403, detail="Dev login is disabled in production")
+
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(User).where(User.github_login == login).limit(1))
+        user = result.scalar_one_or_none()
+        if user is None:
+            user = User(
+                github_id=676767,
+                github_login=login,
+                email=f"{login}@users.noreply.github.com",
+                avatar_url="https://avatars.githubusercontent.com/u/676767?v=4",
+            )
+            session.add(user)
+            await session.commit()
+            await session.refresh(user)
+
+        user_id_str = str(user.id)
+
+    session_token = create_session_token(user_id_str)
+    web_base = os.getenv("WEB_APP_URL", "http://localhost:3000")
+    redirect_url = f"{web_base}/dashboard?login={login}&token={session_token}"
+    response = RedirectResponse(url=redirect_url, status_code=303)
+    response.set_cookie(
+        key="telex_session",
+        value=session_token,
+        max_age=60 * 60 * 24 * 30,
+        httponly=True,
+        secure=False,
+        samesite="lax",
+    )
+    response.set_cookie(
+        key="telex_user",
+        value=login,
+        max_age=60 * 60 * 24 * 30,
+        httponly=False,
+        secure=False,
+        samesite="lax",
+    )
     return response
 
 
@@ -330,5 +398,3 @@ async def require_current_user(request: Request) -> User:
         if not user:
             raise HTTPException(status_code=401, detail="User not found")
         return user
-
-

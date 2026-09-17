@@ -2,9 +2,11 @@
 Sample Python service for testing tree-sitter AST scanner.
 Calls create_completion directly and via client.create_completion().
 """
+
 from openai import OpenAI
 
 client = OpenAI()
+
 
 def run_pipeline(prompt: str):
     # Plain identifier call

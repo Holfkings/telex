@@ -2,10 +2,10 @@
 Change extractor — uses Gemini to parse a changelog and extract structured
 breaking changes from a package version bump.
 """
+
 import json
 import logging
 import re
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -38,10 +38,10 @@ async def extract_breaking_changes(
     """
     Feed changelog text to Gemini and get back structured detected_changes rows.
     """
-    from services.patch_providers import get_patch_provider
 
     from google import genai  # type: ignore[import]
     from google.genai import types as genai_types  # type: ignore[import]
+
     from config import settings
 
     client = genai.Client(
@@ -63,7 +63,9 @@ async def extract_breaking_changes(
     )
     raw = response.text
     if raw is None:
-        raise ValueError("extract_breaking_changes: model returned no text (content may have been blocked)")
+        raise ValueError(
+            "extract_breaking_changes: model returned no text (content may have been blocked)"
+        )
     raw = raw.strip()
 
     # Strip markdown fences if present

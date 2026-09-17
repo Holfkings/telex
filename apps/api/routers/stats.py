@@ -1,14 +1,14 @@
 """
 Stats API — dashboard summary counts.
 """
+
 from fastapi import APIRouter, Depends
-from sqlalchemy import select, func
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from db.models import DetectedChange, Patch, PullRequest, Repo
 from db.session import get_session
-from db.models import Repo, PullRequest, Patch, DetectedChange
-from schemas import StatsOut, DetectedChangeSummary
-from routers.auth import require_auth
+from schemas import DetectedChangeSummary, StatsOut
 
 router = APIRouter(prefix="/api", tags=["stats"])
 
@@ -21,9 +21,7 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
         await session.execute(select(func.count(Repo.id)).where(Repo.is_active == True))
     ).scalar_one()
 
-    prs_total = (
-        await session.execute(select(func.count(PullRequest.id)))
-    ).scalar_one()
+    prs_total = (await session.execute(select(func.count(PullRequest.id)))).scalar_one()
 
     prs_merged = (
         await session.execute(
@@ -63,8 +61,8 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
 @router.get("/activity")
 async def get_activity(session: AsyncSession = Depends(get_session)):
     """Return flat reverse-chronological activity across all repos (PRs, patches, detected changes)."""
-    from db.models import CodeUsage, DetectedChange, PackageVersion, Package, ValidationRun
-    from sqlalchemy.orm import selectinload
+
+    from db.models import CodeUsage, DetectedChange, ValidationRun
 
     activities: list[dict] = []
 
@@ -77,17 +75,19 @@ async def get_activity(session: AsyncSession = Depends(get_session)):
     )
     pr_res = await session.execute(pr_stmt)
     for pr, repo in pr_res.all():
-        activities.append({
-            "id": f"pr-{pr.id}",
-            "type": "pull_request",
-            "repo_name": repo.full_name,
-            "title": f"PR #{pr.github_pr_number} ({pr.status})",
-            "description": f"Auto-patch delivery on {repo.full_name}",
-            "status": pr.status,
-            "url": pr.github_pr_url,
-            "timestamp": pr.opened_at.isoformat() if pr.opened_at else None,
-            "merged": getattr(pr, "merged", False),
-        })
+        activities.append(
+            {
+                "id": f"pr-{pr.id}",
+                "type": "pull_request",
+                "repo_name": repo.full_name,
+                "title": f"PR #{pr.github_pr_number} ({pr.status})",
+                "description": f"Auto-patch delivery on {repo.full_name}",
+                "status": pr.status,
+                "url": pr.github_pr_url,
+                "timestamp": pr.opened_at.isoformat() if pr.opened_at else None,
+                "merged": getattr(pr, "merged", False),
+            }
+        )
 
     # 2. Patches & Validation Runs
     patch_stmt = (
@@ -115,17 +115,19 @@ async def get_activity(session: AsyncSession = Depends(get_session)):
 
     for patch_row, cu_row, repo_row in patch_rows:
         vr = vr_map.get(patch_row.id)
-        activities.append({
-            "id": f"patch-{patch_row.id}",
-            "type": "patch",
-            "repo_name": repo_row.full_name,
-            "title": f"Patch for {cu_row.file_path}",
-            "description": f"Candidate diff generated via {patch_row.llm_provider}",
-            "status": "verified" if patch_row.verified else "unverified",
-            "verification_mode": vr.verification_mode if vr else "structural_only",
-            "timestamp": patch_row.created_at.isoformat() if patch_row.created_at else None,
-            "url": None,
-        })
+        activities.append(
+            {
+                "id": f"patch-{patch_row.id}",
+                "type": "patch",
+                "repo_name": repo_row.full_name,
+                "title": f"Patch for {cu_row.file_path}",
+                "description": f"Candidate diff generated via {patch_row.llm_provider}",
+                "status": "verified" if patch_row.verified else "unverified",
+                "verification_mode": vr.verification_mode if vr else "structural_only",
+                "timestamp": patch_row.created_at.isoformat() if patch_row.created_at else None,
+                "url": None,
+            }
+        )
 
     # 3. Detected Changes
     dc_stmt = (
@@ -137,16 +139,18 @@ async def get_activity(session: AsyncSession = Depends(get_session)):
     )
     dc_res = await session.execute(dc_stmt)
     for dc_row, cu_row, repo_row in dc_res.all():
-        activities.append({
-            "id": f"change-{dc_row.id}",
-            "type": "detected_change",
-            "repo_name": repo_row.full_name,
-            "title": f"{dc_row.symbol_old} ({dc_row.change_type})",
-            "description": dc_row.description,
-            "status": cu_row.status,
-            "url": None,
-            "timestamp": dc_row.created_at.isoformat() if dc_row.created_at else None,
-        })
+        activities.append(
+            {
+                "id": f"change-{dc_row.id}",
+                "type": "detected_change",
+                "repo_name": repo_row.full_name,
+                "title": f"{dc_row.symbol_old} ({dc_row.change_type})",
+                "description": dc_row.description,
+                "status": cu_row.status,
+                "url": None,
+                "timestamp": dc_row.created_at.isoformat() if dc_row.created_at else None,
+            }
+        )
 
     # Sort all activities by timestamp descending
     activities.sort(

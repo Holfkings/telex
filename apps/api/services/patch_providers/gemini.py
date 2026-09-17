@@ -1,13 +1,12 @@
 import json
-import re
 import logging
-from typing import Optional
+import re
 
 from google import genai  # type: ignore[import]
 from google.genai import types as genai_types  # type: ignore[import]
 
 from .base import FailureClassification, PatchProvider
-from .prompts import PATCH_PROMPT_TEMPLATE, CLASSIFY_FAILURE_PROMPT_TEMPLATE
+from .prompts import CLASSIFY_FAILURE_PROMPT_TEMPLATE, PATCH_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -86,11 +85,12 @@ class GeminiProvider(PatchProvider):
     def model_name(self) -> str:
         return self._model_name
 
-    async def _generate_with_retry(self, prompt: str, max_retries: int = 3) -> Optional[str]:
+    async def _generate_with_retry(self, prompt: str, max_retries: int = 3) -> str | None:
         """Call Gemini API with automatic exponential backoff on transient 429 / 503 / 504 errors."""
         import asyncio
+
         delay = 2.0
-        last_exc: Optional[Exception] = None
+        last_exc: Exception | None = None
 
         for attempt in range(1, max_retries + 1):
             try:
@@ -102,9 +102,25 @@ class GeminiProvider(PatchProvider):
             except Exception as exc:
                 last_exc = exc
                 err_str = str(exc).lower()
-                is_transient = any(code in err_str for code in ("503", "429", "504", "unavailable", "deadline", "resource_exhausted"))
+                is_transient = any(
+                    code in err_str
+                    for code in (
+                        "503",
+                        "429",
+                        "504",
+                        "unavailable",
+                        "deadline",
+                        "resource_exhausted",
+                    )
+                )
                 if is_transient and attempt < max_retries:
-                    logger.warning("GeminiProvider: transient error on attempt %d/%d (%s) — retrying in %.1fs", attempt, max_retries, exc, delay)
+                    logger.warning(
+                        "GeminiProvider: transient error on attempt %d/%d (%s) — retrying in %.1fs",
+                        attempt,
+                        max_retries,
+                        exc,
+                        delay,
+                    )
                     await asyncio.sleep(delay)
                     delay *= 2.0
                 else:
@@ -127,7 +143,8 @@ class GeminiProvider(PatchProvider):
             new_api=new_api or "(not applicable)",
             code_snippet=code_snippet,
             context=context,
-            defect_description=defect_description or "Runtime defect detected — see observed evidence below.",
+            defect_description=defect_description
+            or "Runtime defect detected — see observed evidence below.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
         try:
@@ -203,10 +220,12 @@ class GeminiProvider(PatchProvider):
         Use Gemini 2.5 Flash to generate live deep architectural analysis,
         commit breakdown, risk radar, and self-healing recommendations for a repo.
         """
-        commit_text = "\n".join([
-            f"- [{c.get('short_hash', '')}] {c.get('message', '')} (by {c.get('author', '')} on {c.get('date', '')})"
-            for c in commits[:8]
-        ])
+        commit_text = "\n".join(
+            [
+                f"- [{c.get('short_hash', '')}] {c.get('message', '')} (by {c.get('author', '')} on {c.get('date', '')})"
+                for c in commits[:8]
+            ]
+        )
         deps_text = ", ".join(dependencies) or "standard dependencies"
 
         prompt = f"""You are Telex AI Engine, an autonomous software architecture and dependency-healing analyst.
@@ -244,6 +263,7 @@ Provide a structured, high-tech architectural intelligence report. Return ONLY v
             elif "```" in text:
                 text = text.split("```")[1].split("```")[0].strip()
             import json
+
             result = json.loads(text)
             if isinstance(result, dict):
                 result["degraded"] = False
@@ -269,5 +289,3 @@ Provide a structured, high-tech architectural intelligence report. Return ONLY v
                 ],
                 "degraded": True,
             }
-
-

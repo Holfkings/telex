@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -32,15 +34,14 @@ class Settings(BaseSettings):
 
     # App
     nextauth_secret: str = "telex-development-session-secret-key-32-chars-min"
-    next_public_api_url: str = "https://telex-api.onrender.com"
-    web_app_url: str = "https://telex-pi.vercel.app"
+    next_public_api_url: str = "http://localhost:8000"
+    web_app_url: str = "http://localhost:3000"
     github_app_slug: str = "telex-agent-dev"
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
-        "https://telex-pi.vercel.app",
-        "https://telex-agent-dev.vercel.app",
-        "https://aura-drops-gold.vercel.app",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
     ]
     demo_key: str = "telex_demo_secret_2026"
 
@@ -55,8 +56,6 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
-
-import os
 
 # P1-3: Fail loudly at startup if running in production without real secrets.
 # Uses normalized predicate (checks RENDER or case-insensitive ENVIRONMENT=production).
@@ -75,4 +74,3 @@ if _is_production:
             f"Production startup blocked — the following secrets are missing or have default values: "
             f"{', '.join(_missing)}. Set them as environment variables in Render."
         )
-

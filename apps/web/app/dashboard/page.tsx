@@ -11,6 +11,8 @@ export default function DashboardOverview() {
   const [repos, setRepos] = useState<(Repo & { category?: string })[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"personal" | "benchmark">("personal");
 
@@ -18,14 +20,51 @@ export default function DashboardOverview() {
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "telex-agent-dev"
   }/installations/new`;
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { syncRepos, getStats } = await import("@/lib/api");
+      const [reposRes, statsRes] = await Promise.allSettled([
+        syncRepos(activeTab === "benchmark"),
+        getStats(),
+      ]);
+      if (reposRes.status === "fulfilled" && reposRes.value) {
+        setRepos(reposRes.value as (Repo & { category?: string })[]);
+        const count = reposRes.value.filter((r) => (r as any).category !== "benchmark").length;
+        setSyncNotice(`Synced ${count} personal repositories from GitHub App`);
+        setTimeout(() => setSyncNotice(null), 4000);
+      }
+      if (statsRes.status === "fulfilled") {
+        setStats(statsRes.value);
+      }
+    } catch {
+      // Keep existing data
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const switchTab = async (tab: "personal" | "benchmark") => {
+    setActiveTab(tab);
+    if (tab === "benchmark" && !repos.some((r) => r.category === "benchmark")) {
+      try {
+        const { getRepos } = await import("@/lib/api");
+        const benchmarks = await getRepos(false, true);
+        if (benchmarks) {
+          setRepos(benchmarks as (Repo & { category?: string })[]);
+        }
+      } catch {}
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
+    async function loadData(forceSync: boolean = false) {
       try {
         const { getRepos, getStats } = await import("@/lib/api");
         const [reposData, statsData] = await Promise.allSettled([
-          getRepos(),
+          getRepos(forceSync, activeTab === "benchmark"),
           getStats(),
         ]);
 
@@ -48,17 +87,22 @@ export default function DashboardOverview() {
       }
     }
 
-    loadData();
-    const timer = setInterval(loadData, 10000);
+    loadData(true);
+    const timer = setInterval(() => loadData(false), 8000);
+
+    const onFocus = () => loadData(true);
+    window.addEventListener("focus", onFocus);
+
     return () => {
       isMounted = false;
       clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [activeTab]);
 
   const displayedRepos = repos.filter((r) => {
-    const isPersonal = r.category === "personal" || r.owner?.toLowerCase() === "kesavaraja67";
-    return activeTab === "personal" ? isPersonal : !isPersonal;
+    const isBenchmark = r.category === "benchmark";
+    return activeTab === "benchmark" ? isBenchmark : !isBenchmark;
   });
 
   const totalPatches = stats?.patches_generated ?? repos.reduce((acc, r) => acc + (r.patch_count || 0), 0);
@@ -90,6 +134,22 @@ export default function DashboardOverview() {
 
         {/* Header Actions */}
         <div className="flex items-center gap-3 self-start sm:self-center">
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-white/20 bg-white/[0.04] text-white hover:bg-white/[0.08] hover:border-white font-mono text-xs transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-white" : "text-[#A1A1AA]"}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{isSyncing ? "Syncing..." : "Sync Repos"}</span>
+          </button>
+
           <a
             href={githubInstallUrl}
             target="_blank"
@@ -114,6 +174,18 @@ export default function DashboardOverview() {
           </div>
         </div>
       </div>
+
+      {syncNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="px-4 py-2.5 rounded-xl bg-white/[0.08] border border-white/20 text-white font-mono text-xs flex items-center gap-2.5"
+        >
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#FFFFFF]" />
+          <span>{syncNotice}</span>
+        </motion.div>
+      )}
 
       {/* State 1: Loading Skeleton */}
       {isLoading ? (
@@ -315,7 +387,7 @@ export default function DashboardOverview() {
             <div className="flex items-center gap-2.5 self-start sm:self-auto">
               <div className="inline-flex p-0.5 rounded-lg bg-white/[0.04] border border-white/10 backdrop-blur-md">
                 <button
-                  onClick={() => setActiveTab("personal")}
+                  onClick={() => switchTab("personal")}
                   className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
                     activeTab === "personal"
                       ? "bg-white text-black shadow-sm"
@@ -325,7 +397,7 @@ export default function DashboardOverview() {
                   My Repositories
                 </button>
                 <button
-                  onClick={() => setActiveTab("benchmark")}
+                  onClick={() => switchTab("benchmark")}
                   className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
                     activeTab === "benchmark"
                       ? "bg-white text-black shadow-sm"

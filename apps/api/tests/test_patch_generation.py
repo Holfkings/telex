@@ -43,7 +43,9 @@ def test_validate_patch_unable_to_patch_sentinel():
 
 def test_validate_patch_invalid_format():
     """Empty or unstructured text fails diff validation."""
-    applies_cleanly, parses, scope_ok = validate_patch("Just some random text explanation", "some code")
+    applies_cleanly, parses, scope_ok = validate_patch(
+        "Just some random text explanation", "some code"
+    )
     assert applies_cleanly is False
     assert parses is False
     assert scope_ok is False
@@ -186,7 +188,9 @@ async def test_verify_patch_via_github_actions_success(monkeypatch):
 
     monkeypatch.setattr(gh_svc, "fetch_file_content", lambda *args, **kwargs: snippet)
     monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
-    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(
+        gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456"
+    )
     monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
 
     async def mock_wait_ci(*args, **kwargs):
@@ -198,7 +202,9 @@ async def test_verify_patch_via_github_actions_success(monkeypatch):
             "typechecks": True,
             "tests_pass": True,
             "log": "Verification Check [Telex Verification Gate]: passed",
-            "check_runs": [{"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}],
+            "check_runs": [
+                {"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}
+            ],
         }
 
     monkeypatch.setattr(gh_svc, "wait_for_telex_verification", mock_wait_ci)
@@ -217,5 +223,3 @@ async def test_verify_patch_via_github_actions_success(monkeypatch):
     assert result["is_verified"] is True
     assert result["tests_pass"] is True
     assert result["typechecks"] is True
-
-

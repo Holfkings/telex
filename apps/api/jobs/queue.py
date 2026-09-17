@@ -7,10 +7,14 @@ Phase 8 additions:
   from the spec: simple max-N running cap, not a full fair-share scheduler).
   The cap prevents one high-volume installation from starving all others.
 """
+
 import logging
 import os as _os
-from sqlalchemy import select, func, text
+from typing import Any
+
+from sqlalchemy import func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
 from db.models import Job
 
 logger = logging.getLogger(__name__)
@@ -36,7 +40,7 @@ async def _lock_installation(session: AsyncSession, installation_id: str) -> Non
         )
 
 
-async def _resolve_payload_installation_id(session: AsyncSession, payload: dict) -> str | None:
+async def _resolve_payload_installation_id(session: AsyncSession, payload: Any) -> str | None:
     """
     Resolve the installation ID from top-level payload or referenced entities.
     Checks payload['installation_id'], 'repo_id', 'code_usage_id', and 'patch_id'.
@@ -162,7 +166,9 @@ async def dequeue_job(session: AsyncSession, worker_id: str) -> Job | None:
                 if running >= _MAX_RUNNING_PER_INSTALLATION:
                     logger.debug(
                         "dequeue_job: installation %s is at cap (%d running) — skipping job %s",
-                        iid, running, job.id,
+                        iid,
+                        running,
+                        job.id,
                     )
                     continue
 

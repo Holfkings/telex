@@ -5,7 +5,7 @@ export async function GET(request: NextRequest) {
   const code = searchParams.get("code");
   const state = searchParams.get("state") || "";
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://telex-api.onrender.com";
+  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
   if (!code) {
     return NextResponse.redirect(new URL("/dashboard", request.url));

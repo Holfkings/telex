@@ -12,8 +12,7 @@ class PatchProvider(Protocol):
     """Interface every LLM patch provider must satisfy."""
 
     @property
-    def model_name(self) -> str:
-        ...
+    def model_name(self) -> str: ...
 
     async def generate_patch(
         self,
@@ -63,4 +62,3 @@ class PatchProvider(Protocol):
         in diagnose_runtime_failure.py (Tier 2 — genuinely ambiguous cases only).
         """
         ...
-

@@ -51,11 +51,17 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Check formatting (Black)
+        run: black --check .
+
+      - name: Check linting (Ruff)
+        run: ruff check .
+
       - name: Run Alembic migrations
         run: alembic upgrade head
 
-      - name: Run tests
-        run: pytest -v --tb=short
+      - name: Run tests with coverage (>=80%)
+        run: pytest -v --tb=short --cov=. --cov-report=term-missing --cov-report=xml --cov-fail-under=80
 
       - name: Dependency audit (pip-audit)
         # Phase 9.4: fail CI on any detected vulnerability in Python deps

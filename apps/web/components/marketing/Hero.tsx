@@ -14,13 +14,13 @@ const TelexBot3D = dynamic(() => import("./TelexBot3D"), { ssr: false });
 
 export default function Hero() {
   const handleInstall = () => {
-    const hasUser = typeof document !== "undefined" && document.cookie.includes("telex_user=");
+    const hasUser =
+      typeof document !== "undefined" &&
+      (document.cookie.includes("telex_user=") ||
+        Boolean(localStorage.getItem("telex_user")) ||
+        Boolean(localStorage.getItem("telex_token")));
     const appName = process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "telex-agent-dev";
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL ||
-      (window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-        ? "https://telex-api.onrender.com"
-        : "http://localhost:8000");
+    const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
     if (hasUser) {
       window.location.href = `https://github.com/apps/${appName}/installations/new`;

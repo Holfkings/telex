@@ -1,18 +1,21 @@
 """
 Telex FastAPI application entry point.
 """
+
 import asyncio
+import logging
 import os
-import re
 import uuid
 from contextlib import asynccontextmanager
-import logging
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from config import settings
-from routers import auth, repos, packages, webhooks, stats, settings as settings_router
+from routers import auth, packages, repos, stats, webhooks
+from routers import settings as settings_router
+from services.logging_utils import install_redacting_formatters
 
 logging.basicConfig(
     level=logging.INFO,
@@ -20,14 +23,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger("telex.api")
 
-
-# ── Security: redact API key patterns from all log output ───────────────────
-from services.logging_utils import (
-    RedactingFormatter,
-    _KEY_PATTERN,
-    install_redacting_formatters,
-)
-
+# Redact API key patterns from all log output
 install_redacting_formatters()
 # ───────────────────────────────────────────────────────────────────────
 
@@ -40,9 +36,12 @@ async def lifespan(app: FastAPI):
     scheduler = None
     if os.getenv("EMBEDDED_WORKER", "true").lower() in ("true", "1", "yes"):
         try:
-            from jobs.worker import worker_loop, start_scheduler
+            from jobs.worker import start_scheduler, worker_loop
+
             scheduler = start_scheduler()
-            worker_task = asyncio.create_task(worker_loop(f"worker-embedded-{uuid.uuid4().hex[:6]}"))
+            worker_task = asyncio.create_task(
+                worker_loop(f"worker-embedded-{uuid.uuid4().hex[:6]}")
+            )
             logger.info("Embedded autonomous job worker started in background.")
         except Exception as e:
             logger.warning("Could not start embedded background worker: %s", e)
@@ -72,7 +71,7 @@ _is_prod = bool(os.getenv("RENDER") or os.getenv("ENVIRONMENT", "").lower() == "
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://(telex|aura-drops)[a-zA-Z0-9_-]*\.vercel\.app$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -88,14 +87,10 @@ app.include_router(stats.router)
 app.include_router(settings_router.router)
 
 
-
 @app.get("/health")
 async def health():
     return {"status": "ok", "provider": settings.llm_provider_default}
 
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):

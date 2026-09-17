@@ -5,9 +5,10 @@ Handles:
   - Installation-scoped API clients via GitHub App JWT
   - Branch creation, file commits, and PR opening
 """
+
 import asyncio
 import logging
-from typing import Optional, Any
+from typing import Any
 
 from config import settings
 
@@ -15,7 +16,12 @@ logger = logging.getLogger(__name__)
 
 
 try:
-    from github import Github, GithubIntegration, GithubException, InputGitTreeElement  # type: ignore[import]
+    from github import (  # type: ignore[import]
+        Github,
+        GithubException,
+        GithubIntegration,
+        InputGitTreeElement,
+    )
 except ImportError:
     Github: Any = None
     GithubIntegration: Any = None
@@ -30,13 +36,12 @@ def get_installation_token(installation_id: int) -> str:
     if GithubIntegration is None:
         raise RuntimeError("PyGithub not installed — run: pip install PyGithub")
 
-    private_key = settings.github_app_private_key.replace("\\n", "\n").strip('"\'')
+    private_key = settings.github_app_private_key.replace("\\n", "\n").strip("\"'")
     integration = GithubIntegration(
         int(settings.github_app_id),
         private_key,
     )
     return integration.get_access_token(installation_id).token
-
 
 
 def check_rate_limit_and_wait(gh) -> None:
@@ -50,6 +55,7 @@ def check_rate_limit_and_wait(gh) -> None:
     exponential-backoff retry path.
     """
     import time
+
     try:
         rl = gh.get_rate_limit()
         core = rl.core
@@ -66,7 +72,8 @@ def check_rate_limit_and_wait(gh) -> None:
         wait_secs = max(0, reset_ts - now_ts) + 5  # 5s buffer
         logger.warning(
             "GitHub rate limit low (%d remaining) — sleeping %.0fs until reset",
-            remaining, wait_secs,
+            remaining,
+            wait_secs,
         )
         time.sleep(min(wait_secs, 70))  # cap at 70s so the worker heartbeat stays alive
         # Re-check; if still 0 raise so the job is re-queued via the retry mechanism
@@ -171,7 +178,9 @@ async def open_patch_pr(
     return await asyncio.to_thread(_do_github_work)
 
 
-def apply_diff_to_content(file_path: str, original_content: str, diff: str) -> tuple[bool, str, str]:
+def apply_diff_to_content(
+    file_path: str, original_content: str, diff: str
+) -> tuple[bool, str, str]:
     """
     Apply a unified diff to original_content using an isolated micro git process.
     Takes ~10ms and < 2 MB RAM (zero full repo cloning, zero npm ci).
@@ -180,10 +189,10 @@ def apply_diff_to_content(file_path: str, original_content: str, diff: str) -> t
         (success: bool, new_content: str, log: str)
     """
     import os
+    import shutil
     import stat
     import subprocess
     import tempfile
-    import shutil
 
     def _remove_readonly(func, path, _):
         try:
@@ -219,7 +228,7 @@ def apply_diff_to_content(file_path: str, original_content: str, diff: str) -> t
             err_msg = res.stderr.strip() or res.stdout.strip() or "git apply rejected diff"
             return False, original_content, f"git apply failed: {err_msg}"
 
-        with open(full_target, "r", encoding="utf-8") as f:
+        with open(full_target, encoding="utf-8") as f:
             new_content = f.read()
 
         return True, new_content, "git apply succeeded cleanly."
@@ -234,7 +243,7 @@ def create_or_update_branch(
     installation_id: int,
     branch_name: str,
     base_branch: str = "main",
-) -> Optional[str]:
+) -> str | None:
     """Create or reset a branch on GitHub to the HEAD of base_branch. Returns base commit SHA."""
     try:
         gh = get_installation_client(installation_id)
@@ -252,7 +261,9 @@ def create_or_update_branch(
                 raise
         return base_sha
     except Exception as exc:
-        logger.warning("create_or_update_branch failed for %s:%s — %s", repo_full_name, branch_name, exc)
+        logger.warning(
+            "create_or_update_branch failed for %s:%s — %s", repo_full_name, branch_name, exc
+        )
         return None
 
 
@@ -263,7 +274,7 @@ def push_file_to_branch(
     file_path: str,
     content: str,
     commit_message: str,
-) -> Optional[str]:
+) -> str | None:
     """Commit updated file content to branch on GitHub via REST API. Returns new commit SHA."""
     try:
         gh = get_installation_client(installation_id)
@@ -279,7 +290,13 @@ def push_file_to_branch(
         commit = result.get("commit")
         return commit.sha if commit else None
     except Exception as exc:
-        logger.warning("push_file_to_branch failed for %s:%s on %s — %s", repo_full_name, file_path, branch_name, exc)
+        logger.warning(
+            "push_file_to_branch failed for %s:%s on %s — %s",
+            repo_full_name,
+            file_path,
+            branch_name,
+            exc,
+        )
         return None
 
 
@@ -292,6 +309,7 @@ def detect_repo_environment(
     Inspect target repository via GitHub API to detect ecosystem, package manager, and test scripts.
     """
     import json
+
     env_info = {
         "ecosystem": "node",
         "package_manager": "npm",
@@ -306,7 +324,9 @@ def detect_repo_environment(
         gh = get_installation_client(installation_id)
         repo = gh.get_repo(repo_full_name)
         root_contents = repo.get_contents("", ref=ref)
-        file_names = {item.name for item in root_contents} if isinstance(root_contents, list) else set()
+        file_names = (
+            {item.name for item in root_contents} if isinstance(root_contents, list) else set()
+        )
 
         if "package.json" in file_names:
             pkg_file = repo.get_contents("package.json", ref=ref)
@@ -319,19 +339,29 @@ def detect_repo_environment(
                         pm = "pnpm"
                         install_cmd = "pnpm install --frozen-lockfile"
                         test_cmd = "pnpm test" if "test" in scripts else ""
-                        typecheck_cmd = "pnpm run typecheck" if "typecheck" in scripts else "pnpm exec tsc --noEmit"
+                        typecheck_cmd = (
+                            "pnpm run typecheck"
+                            if "typecheck" in scripts
+                            else "pnpm exec tsc --noEmit"
+                        )
                     elif "yarn.lock" in file_names:
                         pm = "yarn"
                         install_cmd = "yarn install --frozen-lockfile"
                         test_cmd = "yarn test" if "test" in scripts else ""
-                        typecheck_cmd = "yarn typecheck" if "typecheck" in scripts else "yarn tsc --noEmit"
+                        typecheck_cmd = (
+                            "yarn typecheck" if "typecheck" in scripts else "yarn tsc --noEmit"
+                        )
                     else:
                         pm = "npm"
                         install_cmd = "npm ci"
                         test_cmd = "npm test" if "test" in scripts else ""
-                        typecheck_cmd = "npm run typecheck" if "typecheck" in scripts else "npx tsc --noEmit"
+                        typecheck_cmd = (
+                            "npm run typecheck" if "typecheck" in scripts else "npx tsc --noEmit"
+                        )
 
-                    has_tsconfig = "tsconfig.json" in file_names or "tsconfig.base.json" in file_names
+                    has_tsconfig = (
+                        "tsconfig.json" in file_names or "tsconfig.base.json" in file_names
+                    )
                     has_test = bool(test_cmd) and "no test specified" not in scripts.get("test", "")
 
                     return {
@@ -347,7 +377,11 @@ def detect_repo_environment(
                     logger.warning("detect_repo_environment: failed to parse package.json: %s", e)
 
         elif "pyproject.toml" in file_names or "requirements.txt" in file_names:
-            install_cmd = "pip install -r requirements.txt" if "requirements.txt" in file_names else "pip install -e ."
+            install_cmd = (
+                "pip install -r requirements.txt"
+                if "requirements.txt" in file_names
+                else "pip install -e ."
+            )
             return {
                 "ecosystem": "python",
                 "package_manager": "pip",
@@ -360,7 +394,11 @@ def detect_repo_environment(
 
         return env_info
     except Exception as exc:
-        logger.warning("detect_repo_environment failed for %s: %s (using default node/npm)", repo_full_name, exc)
+        logger.warning(
+            "detect_repo_environment failed for %s: %s (using default node/npm)",
+            repo_full_name,
+            exc,
+        )
         return env_info
 
 
@@ -452,7 +490,7 @@ def commit_verification_bundle(
     patched_content: str,
     workflow_file_path: str,
     workflow_content: str,
-) -> Optional[str]:
+) -> str | None:
     """
     Commit BOTH the patched file and the dynamic verification workflow to branch_name
     in a single atomic commit using PyGithub's Git Data API. Returns the new commit SHA.
@@ -485,10 +523,18 @@ def commit_verification_bundle(
             parents=[base_commit.commit],
         )
         ref.edit(new_commit.sha)
-        logger.info("commit_verification_bundle: committed %s and %s on %s (SHA: %s)", patched_file_path, workflow_file_path, branch_name, new_commit.sha)
+        logger.info(
+            "commit_verification_bundle: committed %s and %s on %s (SHA: %s)",
+            patched_file_path,
+            workflow_file_path,
+            branch_name,
+            new_commit.sha,
+        )
         return new_commit.sha
     except Exception as exc:
-        logger.error("commit_verification_bundle failed on %s:%s — %s", repo_full_name, branch_name, exc)
+        logger.error(
+            "commit_verification_bundle failed on %s:%s — %s", repo_full_name, branch_name, exc
+        )
         return None
 
 
@@ -522,11 +568,13 @@ async def wait_for_telex_verification(
     expected_workflow_name or commit_sha until completion or timeout.
     """
     import time
+
     start_time = time.time()
     observed_checks: dict[str, dict] = {}
     saw_checks = False
 
     while (time.time() - start_time) < timeout_seconds:
+
         def _query():
             gh = get_installation_client(installation_id)
             repo = gh.get_repo(repo_full_name)
@@ -544,7 +592,8 @@ async def wait_for_telex_verification(
 
         # Filter check runs for our specific verification gate
         matching_checks = [
-            cr for cr in check_runs
+            cr
+            for cr in check_runs
             if "telex" in (cr.name or "").lower() or expected_workflow_name in (cr.name or "")
         ]
         target_checks = matching_checks or check_runs
@@ -563,11 +612,18 @@ async def wait_for_telex_verification(
 
             all_completed = all(c["status"] == "completed" for c in observed_checks.values())
             if all_completed and observed_checks:
-                all_success = all(c["conclusion"] in ("success", "neutral", "skipped") for c in observed_checks.values())
+                all_success = all(
+                    c["conclusion"] in ("success", "neutral", "skipped")
+                    for c in observed_checks.values()
+                )
 
                 logs = []
                 for c in observed_checks.values():
-                    status_str = "passed" if c["conclusion"] in ("success", "skipped") else f"failed ({c['conclusion']})"
+                    status_str = (
+                        "passed"
+                        if c["conclusion"] in ("success", "skipped")
+                        else f"failed ({c['conclusion']})"
+                    )
                     logs.append(f"Verification Check [{c['name']}]: {status_str}")
                     if c["summary"]:
                         logs.append(f"Summary: {c['summary'][:400]}")
@@ -581,7 +637,8 @@ async def wait_for_telex_verification(
                     "conclusion": "success" if all_success else "failure",
                     "typechecks": all_success,
                     "tests_pass": all_success,
-                    "log": "\n".join(logs) or f"Verification Gate: {'passed' if all_success else 'failed'}",
+                    "log": "\n".join(logs)
+                    or f"Verification Gate: {'passed' if all_success else 'failed'}",
                     "check_runs": list(observed_checks.values()),
                 }
 
@@ -608,7 +665,7 @@ def fetch_file_content(
     installation_id: int,
     file_path: str,
     ref: str = "main",
-) -> Optional[str]:
+) -> str | None:
     """Fetch the text content of a file from GitHub using the installation client."""
     try:
         gh = get_installation_client(installation_id)
@@ -622,7 +679,7 @@ def fetch_file_content(
         return None
 
 
-def verify_webhook_signature(payload: bytes, signature_header: Optional[str]) -> bool:
+def verify_webhook_signature(payload: bytes, signature_header: str | None) -> bool:
     """
     Verify a GitHub webhook HMAC-SHA256 signature.
 
@@ -665,6 +722,7 @@ async def create_check_run(
 
     Returns True if the check run was created, False on error.
     """
+
     def _do_create() -> bool:
         gh = get_installation_client(installation_id)
         # PyGithub exposes create_check_run via get_repo().create_check_run()
@@ -682,13 +740,18 @@ async def create_check_run(
             )
             logger.info(
                 "create_check_run: created '%s' on %s (%s), conclusion=%s",
-                name, repo_full_name, head_sha[:8], conclusion,
+                name,
+                repo_full_name,
+                head_sha[:8],
+                conclusion,
             )
             return True
         except Exception as exc:
             logger.warning(
                 "create_check_run: failed for %s sha=%s: %s",
-                repo_full_name, head_sha[:8], exc,
+                repo_full_name,
+                head_sha[:8],
+                exc,
             )
             return False
 

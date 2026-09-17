@@ -1,12 +1,14 @@
 """
 Packages API — manual rescan trigger.
 """
+
 import uuid
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from db.session import get_session
 from db.models import Package, PackageVersion
+from db.session import get_session
 from jobs.queue import enqueue_job
 from schemas import RescanIn
 
@@ -29,6 +31,7 @@ async def rescan_package(
 
     # Upsert the target version
     from sqlalchemy import select
+
     existing = await session.execute(
         select(PackageVersion).where(
             PackageVersion.package_id == package_id,

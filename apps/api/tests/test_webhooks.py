@@ -1,6 +1,7 @@
 """
 Tests for webhook handlers — Section 5.3 acceptance rate tracking.
 """
+
 import uuid
 import pytest
 from datetime import datetime, timezone
@@ -198,3 +199,159 @@ async def test_handle_pull_request_reopened(monkeypatch):
     assert mock_pr.merged is False
     assert mock_pr.merged_at is None
     session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_installation_created(monkeypatch):
+    session = AsyncMock()
+    mock_result = MagicMock()
+    mock_result.scalar_one_or_none.return_value = None
+    session.execute = AsyncMock(return_value=mock_result)
+    session.flush = AsyncMock()
+    session.commit = AsyncMock()
+    added_items = []
+    session.add = MagicMock(side_effect=lambda x: added_items.append(x))
+
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr("routers.webhooks.AsyncSessionLocal", lambda: mock_ctx)
+
+    payload = {
+        "action": "created",
+        "installation": {
+            "id": 9999,
+            "account": {"login": "test-org", "type": "Organization"},
+        },
+        "repositories": [
+            {"id": 111, "full_name": "test-org/repo-1"},
+            {"id": 222, "full_name": "test-org/repo-2"},
+        ],
+    }
+
+    from routers.webhooks import _handle_installation_created
+
+    await _handle_installation_created(payload)
+    assert len(added_items) == 3
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_installation_repositories(monkeypatch):
+    session = AsyncMock()
+    existing_repo = Repo(id=uuid.uuid4(), github_repo_id=111, full_name="org/r1", is_active=False)
+    repo_to_remove = Repo(id=uuid.uuid4(), github_repo_id=222, full_name="org/r2", is_active=True)
+
+    call_count = 0
+
+    def fake_execute(stmt):
+        nonlocal call_count
+        call_count += 1
+        mock_res = MagicMock()
+        if call_count == 1:
+            mock_res.scalar_one_or_none.return_value = MagicMock(id=uuid.uuid4())
+        elif call_count == 2:
+            mock_res.scalar_one_or_none.return_value = existing_repo
+        elif call_count == 3:
+            mock_res.scalar_one_or_none.return_value = repo_to_remove
+        else:
+            mock_res.scalar_one_or_none.return_value = None
+        return mock_res
+
+    session.execute = AsyncMock(side_effect=fake_execute)
+    session.commit = AsyncMock()
+    session.add = MagicMock()
+
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr("routers.webhooks.AsyncSessionLocal", lambda: mock_ctx)
+
+    payload = {
+        "action": "added",
+        "installation": {"id": 12345, "account": {"login": "org", "type": "User"}},
+        "repositories_added": [{"id": 111, "full_name": "org/r1"}],
+        "repositories_removed": [{"id": 222, "full_name": "org/r2"}],
+    }
+
+    from routers.webhooks import _handle_installation_repositories
+
+    await _handle_installation_repositories(payload)
+    assert existing_repo.is_active is True
+    assert repo_to_remove.is_active is False
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_handle_installation_deleted(monkeypatch):
+    session = AsyncMock()
+    repo1 = Repo(id=uuid.uuid4(), is_active=True)
+    repo2 = Repo(id=uuid.uuid4(), is_active=True)
+
+    mock_inst = MagicMock(id=uuid.uuid4())
+
+    def fake_execute(stmt):
+        mock_res = MagicMock()
+        stmt_str = str(stmt)
+        if "installations" in stmt_str:
+            mock_res.scalar_one_or_none.return_value = mock_inst
+        else:
+            mock_res.scalars.return_value = [repo1, repo2]
+        return mock_res
+
+    session.execute = AsyncMock(side_effect=fake_execute)
+    session.commit = AsyncMock()
+
+    mock_ctx = MagicMock()
+    mock_ctx.__aenter__ = AsyncMock(return_value=session)
+    mock_ctx.__aexit__ = AsyncMock(return_value=None)
+    monkeypatch.setattr("routers.webhooks.AsyncSessionLocal", lambda: mock_ctx)
+
+    from routers.webhooks import _handle_installation_deleted
+
+    await _handle_installation_deleted(
+        {"action": "deleted", "installation": {"id": 123, "account": {"login": "org"}}}
+    )
+    assert repo1.is_active is False
+    assert repo2.is_active is False
+    session.commit.assert_awaited_once()
+
+
+@pytest.mark.asyncio
+async def test_github_webhook_invalid_signature(monkeypatch):
+    from fastapi import HTTPException
+    from routers.webhooks import github_webhook
+
+    mock_request = AsyncMock()
+    mock_request.body = AsyncMock(return_value=b'{"action":"ping"}')
+
+    monkeypatch.setattr("routers.webhooks.verify_webhook_signature", lambda body, sig: False)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await github_webhook(mock_request, x_hub_signature_256="sha256=invalid")
+    assert exc_info.value.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_github_webhook_dispatch_events(monkeypatch):
+    from routers.webhooks import github_webhook
+
+    mock_request = AsyncMock()
+    mock_request.body = AsyncMock(return_value=b"{}")
+    mock_request.json = AsyncMock(return_value={"action": "created"})
+
+    monkeypatch.setattr("routers.webhooks.verify_webhook_signature", lambda body, sig: True)
+
+    created_called = False
+
+    async def fake_created(payload):
+        nonlocal created_called
+        created_called = True
+
+    monkeypatch.setattr("routers.webhooks._handle_installation_created", fake_created)
+
+    res = await github_webhook(
+        mock_request, x_hub_signature_256="sha256=valid", x_github_event="installation"
+    )
+    assert res == {"ok": True}
+    assert created_called

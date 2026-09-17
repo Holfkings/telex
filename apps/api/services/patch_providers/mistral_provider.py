@@ -4,11 +4,12 @@ Mistral patch provider.
 Default model: mistral-small-latest (fast, cost-effective; change _DEFAULT_MODEL to swap).
 Requires: mistralai>=1.0.0 package.
 """
+
 import logging
 
 from .base import FailureClassification, PatchProvider
 from .gemini import extract_diff, parse_classification_response
-from .prompts import PATCH_PROMPT_TEMPLATE, CLASSIFY_FAILURE_PROMPT_TEMPLATE
+from .prompts import CLASSIFY_FAILURE_PROMPT_TEMPLATE, PATCH_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +51,8 @@ class MistralProvider(PatchProvider):
             new_api=new_api or "(not applicable)",
             code_snippet=code_snippet,
             context=context,
-            defect_description=defect_description or "Runtime defect detected — see observed evidence below.",
+            defect_description=defect_description
+            or "Runtime defect detected — see observed evidence below.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
         try:

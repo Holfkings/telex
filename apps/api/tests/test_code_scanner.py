@@ -109,6 +109,7 @@ def run():
 def test_find_usages_python_fixture():
     """Finds usages inside the sample_service.py fixture file."""
     from pathlib import Path
+
     fixture_path = Path(__file__).parent / "fixtures" / "sample_service.py"
     with open(fixture_path, "rb") as f:
         py_code = f.read()
@@ -118,4 +119,3 @@ def test_find_usages_python_fixture():
     snippets = [u["snippet"] for u in usages]
     assert any('create_completion(model="gpt-4"' in s for s in snippets)
     assert any('client.create_completion(model="gpt-4o"' in s for s in snippets)
-

@@ -11,43 +11,56 @@ The plaintext key is only ever held in memory during the POST handler and is
 immediately discarded after encryption. It is never written to logs or returned
 to the client.
 """
+
 import logging
 import uuid
 from datetime import datetime, timezone
-from typing import Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
-from db.session import AsyncSessionLocal
 from db.models import UserApiKey
+from db.session import AsyncSessionLocal
 from routers.auth import require_auth
-from services.crypto import encrypt_key, decrypt_key
+from services.crypto import encrypt_key
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
 # Supported provider IDs — extend this list as new providers are added.
-SUPPORTED_PROVIDERS = frozenset({
-    "openai", "anthropic", "gemini", "mistral", "groq",
-    "cohere", "xai", "deepseek", "together", "nemotron",
-})
+SUPPORTED_PROVIDERS = frozenset(
+    {
+        "openai",
+        "anthropic",
+        "gemini",
+        "mistral",
+        "groq",
+        "cohere",
+        "xai",
+        "deepseek",
+        "together",
+        "nemotron",
+    }
+)
 
 
 # ── Request / Response schemas ───────────────────────────────────────────────
 
+
 class StoreKeyRequest(BaseModel):
     provider: str = Field(..., description="Provider ID, e.g. 'openai'")
-    key: str = Field(..., min_length=1, description="Plaintext API key (POST only — never returned)")
+    key: str = Field(
+        ..., min_length=1, description="Plaintext API key (POST only — never returned)"
+    )
 
 
 class ApiKeyOut(BaseModel):
     provider: str
     connected: bool
-    created_at: Optional[datetime] = None
-    last_used_at: Optional[datetime] = None
+    created_at: datetime | None = None
+    last_used_at: datetime | None = None
 
 
 class StoreKeyResponse(BaseModel):
@@ -67,7 +80,8 @@ class ListKeysResponse(BaseModel):
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
-def _parse_user_id(auth: dict) -> Optional[uuid.UUID]:
+
+def _parse_user_id(auth: dict) -> uuid.UUID | None:
     """Extract and parse the user UUID from the auth dict returned by require_auth."""
     user_id_str = auth.get("user_id", "")
     if user_id_str == "demo-operator":
@@ -79,6 +93,7 @@ def _parse_user_id(auth: dict) -> Optional[uuid.UUID]:
 
 
 # ── Endpoints ────────────────────────────────────────────────────────────────
+
 
 @router.post("/api-keys", response_model=StoreKeyResponse, status_code=201)
 async def store_api_key(
@@ -107,11 +122,12 @@ async def store_api_key(
 
     now = datetime.now(timezone.utc)
 
-    row: Optional[UserApiKey] = None
+    row: UserApiKey | None = None
     async with AsyncSessionLocal() as session:
         bind = session.get_bind()
         if bind and "postgres" in bind.dialect.name.lower():
             from sqlalchemy.dialects.postgresql import insert as pg_insert
+
             stmt = (
                 pg_insert(UserApiKey)
                 .values(
@@ -136,6 +152,7 @@ async def store_api_key(
             await session.commit()
         else:
             from sqlalchemy.exc import IntegrityError
+
             for attempt in range(3):
                 try:
                     result = await session.execute(
@@ -188,9 +205,7 @@ async def list_api_keys(auth: dict = Depends(require_auth)):
         return ListKeysResponse(keys=[])
 
     async with AsyncSessionLocal() as session:
-        result = await session.execute(
-            select(UserApiKey).where(UserApiKey.user_id == user_id)
-        )
+        result = await session.execute(select(UserApiKey).where(UserApiKey.user_id == user_id))
         rows = result.scalars().all()
 
     keys = [
