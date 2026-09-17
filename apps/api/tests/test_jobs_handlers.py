@@ -159,3 +159,53 @@ async def test_extract_changes_with_detected_changes(monkeypatch):
             assert len(enqueued) == 1
             assert enqueued[0][0] == "scan_repo"
             assert enqueued[0][1]["repo_id"] == str(repo_id)
+
+
+def test_build_pr_title():
+    from jobs.handlers.open_pr import build_pr_title
+
+    assert build_pr_title("chore: update foo", False) == "chore: update foo"
+    assert build_pr_title("chore: update foo", True) == "[semantic-risk] chore: update foo"
+    assert (
+        build_pr_title("[semantic-risk] chore: update foo", True)
+        == "[semantic-risk] chore: update foo"
+    )
+
+
+def test_build_classification_table_and_metadata():
+    from jobs.handlers.open_pr import build_classification_table, build_pr_metadata
+
+    table = build_classification_table(
+        change_type="behavior_change",
+        confidence=0.85,
+        is_semantic_risk=True,
+        allow_install_scripts=True,
+        needs_review=True,
+    )
+    assert "behavior_change" in table
+    assert "85%" in table
+    assert "allowed (opt-in)" in table
+    assert "[Review Required]" in table
+
+    # Blocked scripts and safe change
+    table_safe = build_classification_table(
+        change_type="renamed",
+        confidence=0.95,
+        is_semantic_risk=False,
+        allow_install_scripts=False,
+        needs_review=False,
+    )
+    assert "[Safe] Mechanical change" in table_safe
+    assert "blocked (default)" in table_safe
+    assert "[Review Required]" not in table_safe
+
+    # Metadata helper
+    title, rendered_table = build_pr_metadata(
+        change_type="behavior_change",
+        confidence=0.9,
+        base_title="chore(deps): auto-patch",
+        allow_install_scripts=False,
+        needs_review=True,
+    )
+    assert title.startswith("[semantic-risk]")
+    assert "[Review Required]" in rendered_table

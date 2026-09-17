@@ -33,6 +33,68 @@ def format_verification_disclosure(vr) -> str:
         return "[Warning] No test suite detected in this repo — this patch was validated by parse and type-check only, not by running tests."
 
 
+def build_classification_table(
+    change_type: str,
+    confidence: float,
+    is_semantic_risk: bool,
+    allow_install_scripts: bool = False,
+    needs_review: bool = False,
+) -> str:
+    """Build the markdown Change Classification table for PR bodies."""
+    risk_flag = (
+        "[Warning] Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
+        if is_semantic_risk
+        else "[Safe] Mechanical change"
+    )
+    install_scripts_str = "allowed (opt-in)" if allow_install_scripts else "blocked (default)"
+    table = (
+        "## Change classification\n"
+        "| Field | Value |\n"
+        "|---|---|\n"
+        f"| Change type | {change_type} |\n"
+        f"| Classifier confidence | {confidence:.0%} |\n"
+        f"| Risk flag | {risk_flag} |\n"
+        f"| Install scripts | {install_scripts_str} |\n"
+    )
+    if needs_review:
+        table += "\n> [Review Required] Human review required before merge — see risk flag above.\n"
+    return table
+
+
+def build_pr_title(base_title: str, is_semantic_risk: bool) -> str:
+    """Prefix PR title with [semantic-risk] if the change is flagged as a semantic risk."""
+    if is_semantic_risk and not base_title.startswith("[semantic-risk]"):
+        return f"[semantic-risk] {base_title}"
+    return base_title
+
+
+def build_pr_metadata(
+    change_type: str,
+    confidence: float,
+    base_title: str = "chore(deps): auto-patch for my-lib@2.0",
+    allow_install_scripts: bool = False,
+    needs_review: bool = False,
+    is_semantic_risk: bool | None = None,
+) -> tuple[str, str]:
+    """
+    Combined production helper returning (title, classification_table).
+    Used by open_pr.py and unit tests.
+    """
+    from services.change_extractor import classify_risk
+
+    if is_semantic_risk is None:
+        is_semantic_risk = classify_risk(change_type, confidence)
+    title = build_pr_title(base_title, is_semantic_risk)
+    table = build_classification_table(
+        change_type=change_type,
+        confidence=confidence,
+        is_semantic_risk=is_semantic_risk,
+        allow_install_scripts=allow_install_scripts,
+        needs_review=needs_review,
+    )
+    return title, table
+
+
 async def run(payload: dict) -> None:
     from sqlalchemy import select
 
@@ -141,11 +203,13 @@ async def run(payload: dict) -> None:
             if vr:
                 vr_map[p.id] = vr
 
-        # Pre-load the first detected change to derive classification signal
-        first_dc = None
-        first_cu = next((usage_map[p.id] for p in patches if p.id in usage_map), None)
-        if first_cu:
-            first_dc = await session.get(DetectedChange, first_cu.detected_change_id)
+        # Pre-load detected changes for all code usages associated with these patches
+        dc_map: dict[uuid.UUID, DetectedChange] = {}
+        for cu in usage_map.values():
+            if cu.detected_change_id and cu.detected_change_id not in dc_map:
+                dc = await session.get(DetectedChange, cu.detected_change_id)
+                if dc:
+                    dc_map[cu.detected_change_id] = dc
 
     # ── PyGithub calls run in a thread — they are blocking I/O ───────────────
     gh = await asyncio.to_thread(get_installation_client, installation_github_id)
@@ -173,6 +237,7 @@ async def run(payload: dict) -> None:
             logger.warning("open_pr: could not apply diff to %s: %s", cu.file_path, apply_log)
             new_content = original
 
+        cu_dc = dc_map.get(cu.detected_change_id) if cu.detected_change_id else None
         patch_dicts.append(
             {
                 "file_path": cu.file_path,
@@ -181,6 +246,7 @@ async def run(payload: dict) -> None:
                 "new_version": pv_version,
                 "diff": p.diff,
                 "validation": vr_map.get(p.id),
+                "detected_change": cu_dc,
             }
         )
 
@@ -192,34 +258,44 @@ async def run(payload: dict) -> None:
         )
         return
 
-    # ── Derive classification signal ─────────────────────────────────────────
-    dc_change_type = first_dc.change_type if first_dc else "unknown"
-    dc_confidence = first_dc.confidence if first_dc else 0.8
-    is_semantic_risk = classify_risk(dc_change_type, dc_confidence)
+    # ── Derive aggregated classification signal across included patches ───────
+    included_dcs = [pd.get("detected_change") for pd in patch_dicts]
 
-    # Determine test/typecheck evidence from the first validation run (if any)
-    first_vr = next((vr_map[p.id] for p in patches if p.id in vr_map), None)
-    _tests_passed = getattr(first_vr, "tests_pass", None) if first_vr else None
-    _typecheck_passed = getattr(first_vr, "typechecks", None) if first_vr else None
-
-    # Build PR body with explicit verification evidence
-    risk_flag = (
-        "[Warning] Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
-        if is_semantic_risk
-        else "[Safe] Mechanical change"
+    # If any included patch has no detected_change (unclassified) or triggers classify_risk, flag semantic risk
+    is_semantic_risk = any(
+        dc is None or classify_risk(dc.change_type, dc.confidence) for dc in included_dcs
     )
-    repo_allow_scripts = getattr(repo, "allow_install_scripts", False) if repo else False
-    install_scripts_str = "allowed (opt-in)" if repo_allow_scripts else "blocked (default)"
 
-    classification_table = (
-        "## Change classification\n"
-        "| Field | Value |\n"
-        "|---|---|\n"
-        f"| Change type | {dc_change_type} |\n"
-        f"| Classifier confidence | {dc_confidence:.0%} |\n"
-        f"| Risk flag | {risk_flag} |\n"
-        f"| Install scripts | {install_scripts_str} |\n"
-    )
+    known_dcs = [dc for dc in included_dcs if dc is not None]
+    if known_dcs:
+        distinct_types = sorted({dc.change_type for dc in known_dcs})
+        dc_change_type = ", ".join(distinct_types)
+        # Conservative aggregate: lowest confidence among included changes
+        dc_confidence = min(dc.confidence for dc in known_dcs)
+    else:
+        dc_change_type = "unclassified"
+        dc_confidence = 0.0
+
+    # ── Aggregate test and typecheck evidence across all included patches ─────
+    included_vrs = [pd.get("validation") for pd in patch_dicts]
+    if any(vr is None for vr in included_vrs):
+        _tests_passed = None
+        _typecheck_passed = None
+    else:
+        valid_vrs = [vr for vr in included_vrs if vr is not None]
+        if any(getattr(vr, "tests_pass", None) is False for vr in valid_vrs):
+            _tests_passed = False
+        elif any(getattr(vr, "tests_pass", None) is None for vr in valid_vrs):
+            _tests_passed = None
+        else:
+            _tests_passed = True
+
+        if any(getattr(vr, "typechecks", None) is False for vr in valid_vrs):
+            _typecheck_passed = False
+        elif any(getattr(vr, "typechecks", None) is None for vr in valid_vrs):
+            _typecheck_passed = None
+        else:
+            _typecheck_passed = True
 
     from services.github_service import requires_human_review as _requires_human_review
 
@@ -229,10 +305,18 @@ async def run(payload: dict) -> None:
         is_semantic_risk=is_semantic_risk,
         has_test_coverage_on_changed_symbol=False,
     )
-    if _needs_review:
-        classification_table += (
-            "\n> [Review Required] Human review required before merge — see risk flag above.\n"
-        )
+
+    base_title = f"chore(deps): auto-patch for {pkg_name}@{pv_version}"
+    repo_allow_scripts = getattr(repo, "allow_install_scripts", False) if repo else False
+
+    pr_title, classification_table = build_pr_metadata(
+        change_type=dc_change_type,
+        confidence=dc_confidence,
+        base_title=base_title,
+        allow_install_scripts=repo_allow_scripts,
+        needs_review=_needs_review,
+        is_semantic_risk=is_semantic_risk,
+    )
 
     body_lines = [
         f"## Telex Auto-Patch: `{pkg_name}` → `{pv_version}`\n",
@@ -270,11 +354,6 @@ async def run(payload: dict) -> None:
         body_lines.append(f"```diff\n{pd['diff']}\n```\n")
 
     summary = "\n".join(body_lines)
-
-    # Prefix title with [semantic-risk] if the classifier flagged this change.
-    pr_title = f"chore(deps): auto-patch for {pkg_name}@{pv_version}"
-    if is_semantic_risk:
-        pr_title = f"[semantic-risk] {pr_title}"
 
     # Include a short unique ID so concurrent defects don't collide on the same branch.
     unique_id_source = cu_id_raw or str(uuid.uuid4())

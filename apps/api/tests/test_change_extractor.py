@@ -138,30 +138,16 @@ def test_classify_risk_unknown_type_is_false():
 # ── PR body / title prefix tests ──────────────────────────────────────────────
 
 
+from jobs.handlers.open_pr import build_pr_metadata
+
+
 def _build_pr_body(change_type: str, confidence: float) -> tuple[str, str]:
-    """
-    Minimal inline reimplementation of the classification-table + title-prefix
-    logic from open_pr.py so we can test the output without touching GitHub or
-    the DB.  Kept in sync with the real code by asserting on the same sentinel
-    strings the real code emits.
-    """
-    is_semantic_risk = classify_risk(change_type, confidence)
-    risk_flag = (
-        "[Warning] Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
-        if is_semantic_risk
-        else "[Safe] Mechanical change"
+    """Call production PR metadata formatting helper to verify title and classification table."""
+    return build_pr_metadata(
+        change_type=change_type,
+        confidence=confidence,
+        base_title="chore(deps): auto-patch for my-lib@2.0",
     )
-    classification_table = (
-        "## Change classification\n"
-        "| Field | Value |\n"
-        "|---|---|\n"
-        f"| Change type | {change_type} |\n"
-        f"| Classifier confidence | {confidence:.0%} |\n"
-        f"| Risk flag | {risk_flag} |\n"
-    )
-    base_title = "chore(deps): auto-patch for my-lib@2.0"
-    title = f"[semantic-risk] {base_title}" if is_semantic_risk else base_title
-    return title, classification_table
 
 
 def test_pr_body_semantic_risk_contains_warning_and_prefix():

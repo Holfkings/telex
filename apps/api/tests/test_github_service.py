@@ -43,6 +43,32 @@ def test_requires_human_review_tests_failed():
     )
 
 
+def test_requires_human_review_typecheck_failed():
+    """typecheck_passed=False means typecheck failed — requires review."""
+    assert (
+        requires_human_review(
+            tests_passed=True,
+            typecheck_passed=False,
+            is_semantic_risk=False,
+            has_test_coverage_on_changed_symbol=True,
+        )
+        is True
+    )
+
+
+def test_requires_human_review_typecheck_none():
+    """typecheck_passed=None means no typecheck recorded — requires review."""
+    assert (
+        requires_human_review(
+            tests_passed=True,
+            typecheck_passed=None,
+            is_semantic_risk=False,
+            has_test_coverage_on_changed_symbol=True,
+        )
+        is True
+    )
+
+
 def test_requires_human_review_semantic_risk():
     """is_semantic_risk=True triggers review even when tests passed."""
     assert (
@@ -312,3 +338,96 @@ async def test_open_patch_pr_creates_label_if_missing():
 
     mock_repo.create_label.assert_called_once()
     mock_pr.add_to_labels.assert_called_once_with(created_label)
+
+
+@pytest.mark.asyncio
+async def test_open_patch_pr_raises_when_label_fails():
+    """If get_label and create_label both fail, open_patch_pr raises GithubException."""
+    from github import GithubException
+    from services.github_service import open_patch_pr
+
+    mock_gh = MagicMock()
+    mock_repo = MagicMock()
+    mock_gh.get_repo.return_value = mock_repo
+
+    mock_branch = MagicMock()
+    mock_branch.commit.sha = "head-sha"
+    mock_repo.get_branch.return_value = mock_branch
+
+    mock_content_file = MagicMock()
+    mock_content_file.sha = "file-sha"
+    mock_repo.get_contents.return_value = mock_content_file
+
+    mock_pr = MagicMock()
+    mock_pr.number = 44
+    mock_pr.html_url = "https://github.com/owner/repo/pull/44"
+    mock_repo.create_pull.return_value = mock_pr
+
+    mock_repo.get_label.side_effect = GithubException(500, "Internal Server Error")
+    mock_repo.create_label.side_effect = GithubException(500, "Internal Server Error")
+
+    patches = [
+        {
+            "file_path": "src/index.ts",
+            "new_content": "console.log('patched');",
+            "package_name": "my-pkg",
+            "new_version": "2.0.0",
+        }
+    ]
+
+    with patch("services.github_service.get_installation_client", return_value=mock_gh):
+        with pytest.raises(GithubException):
+            await open_patch_pr(
+                repo_full_name="owner/repo",
+                installation_id=123,
+                branch_name="telex/patch-fail",
+                patches=patches,
+                summary="Test patch summary",
+                is_semantic_risk=True,
+            )
+
+
+def test_detect_python_blocks_scripts_by_default():
+    """Python repo skips pip install when allow_install_scripts=False."""
+    root_items = ["requirements.txt"]
+    root_file_mocks = [MagicMock(name=n) for n in root_items]
+    for fm, n in zip(root_file_mocks, root_items):
+        fm.name = n
+
+    mock_repo = MagicMock()
+    mock_repo.get_contents.return_value = root_file_mocks
+    mock_gh = MagicMock()
+    mock_gh.get_repo.return_value = mock_repo
+
+    with patch("services.github_service.get_installation_client", return_value=mock_gh):
+        env = detect_repo_environment(
+            repo_full_name="owner/repo",
+            installation_id=12345,
+            ref="main",
+            allow_install_scripts=False,
+        )
+    assert env["ecosystem"] == "python"
+    assert "Dependency installation skipped" in env["install_cmd"]
+
+
+def test_detect_python_allows_scripts_when_opted_in():
+    """Python repo runs pip install when allow_install_scripts=True."""
+    root_items = ["requirements.txt"]
+    root_file_mocks = [MagicMock(name=n) for n in root_items]
+    for fm, n in zip(root_file_mocks, root_items):
+        fm.name = n
+
+    mock_repo = MagicMock()
+    mock_repo.get_contents.return_value = root_file_mocks
+    mock_gh = MagicMock()
+    mock_gh.get_repo.return_value = mock_repo
+
+    with patch("services.github_service.get_installation_client", return_value=mock_gh):
+        env = detect_repo_environment(
+            repo_full_name="owner/repo",
+            installation_id=12345,
+            ref="main",
+            allow_install_scripts=True,
+        )
+    assert env["ecosystem"] == "python"
+    assert env["install_cmd"] == "pip install -r requirements.txt"

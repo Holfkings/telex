@@ -121,6 +121,8 @@ def requires_human_review(
     """
     if tests_passed is None or tests_passed is False:
         return True
+    if typecheck_passed is None or typecheck_passed is False:
+        return True
     if is_semantic_risk:
         return True
     if not has_test_coverage_on_changed_symbol:
@@ -238,10 +240,13 @@ async def open_patch_pr(
                     # Concurrent worker may have created it first — re-fetch
                     try:
                         label = repo.get_label("needs-human-review")
-                    except GithubException:
-                        label = None
-            if label is not None:
-                pr.add_to_labels(label)
+                    except GithubException as label_err:
+                        logger.error(
+                            "open_patch_pr: failed to fetch or create needs-human-review label: %s",
+                            label_err,
+                        )
+                        raise
+            pr.add_to_labels(label)
 
         logger.info("PR #%d on %s: %s", pr.number, repo_full_name, pr.html_url)
         return pr.html_url, pr.number
@@ -470,11 +475,14 @@ def detect_repo_environment(
                     logger.warning("detect_repo_environment: failed to parse package.json: %s", e)
 
         elif "pyproject.toml" in file_names or "requirements.txt" in file_names:
-            install_cmd = (
-                "pip install -r requirements.txt"
-                if "requirements.txt" in file_names
-                else "pip install -e ."
-            )
+            if allow_install_scripts:
+                install_cmd = (
+                    "pip install -r requirements.txt"
+                    if "requirements.txt" in file_names
+                    else "pip install -e ."
+                )
+            else:
+                install_cmd = "echo 'Dependency installation skipped: allow_install_scripts is false (requires opt-in)'"
             return {
                 "ecosystem": "python",
                 "package_manager": "pip",
