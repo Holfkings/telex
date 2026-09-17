@@ -19,6 +19,7 @@ from schemas import (
     RepoToggleIn,
     RepoUpdateIn,
 )
+from services.change_extractor import classify_risk
 from services.repo_service import (
     explain_repo_with_gemini,
     get_core_repositories_async,
@@ -127,6 +128,8 @@ async def update_repo_settings(repo_id: str, body: RepoUpdateIn):
             repo.requires_typecheck = body.requires_typecheck
         if body.is_active is not None:
             repo.is_active = body.is_active
+        if body.allow_install_scripts is not None:
+            repo.allow_install_scripts = body.allow_install_scripts
 
         await session.commit()
         return {
@@ -135,6 +138,7 @@ async def update_repo_settings(repo_id: str, body: RepoUpdateIn):
             "requires_tests": repo.requires_tests,
             "requires_typecheck": repo.requires_typecheck,
             "is_active": repo.is_active,
+            "allow_install_scripts": repo.allow_install_scripts,
         }
 
 
@@ -245,6 +249,12 @@ async def list_patches(repo_id: str):
                             typecheck_passed=vr_row.typechecks if vr_row else None,
                             change_type=dc_row.change_type if dc_row else None,
                             change_description=dc_row.description if dc_row else None,
+                            confidence=dc_row.confidence if dc_row else None,
+                            is_semantic_risk=(
+                                classify_risk(dc_row.change_type, dc_row.confidence)
+                                if dc_row
+                                else None
+                            ),
                         )
                     )
 

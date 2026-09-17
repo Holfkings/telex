@@ -317,23 +317,49 @@ export default function RepoDetailPage({
 
                     <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
                       <span className="text-[10px] text-[#71717A] uppercase">Test Suite Gate</span>
-                      <span className="font-bold text-white">
-                        {activePatch.tests_passed === true
-                          ? "✓ Passing (100%)"
-                          : activePatch.tests_passed === false
-                          ? "✗ Failed"
-                          : "— Bypassed / None"}
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        {activePatch.tests_passed === true ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-emerald-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span className="text-emerald-400">Passing (100%)</span>
+                          </>
+                        ) : activePatch.tests_passed === false ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-rose-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                            <span className="text-rose-400">Failed</span>
+                          </>
+                        ) : (
+                          <span className="text-[#71717A]">&mdash; Bypassed / None</span>
+                        )}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
                       <span className="text-[10px] text-[#71717A] uppercase">Typecheck Gate</span>
-                      <span className="font-bold text-white">
-                        {activePatch.typecheck_passed === true
-                          ? "✓ Passing"
-                          : activePatch.typecheck_passed === false
-                          ? "✗ Failed"
-                          : "— Bypassed / None"}
+                      <span className="font-bold text-white flex items-center gap-1.5">
+                        {activePatch.typecheck_passed === true ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-emerald-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
+                              <polyline points="20 6 9 17 4 12" />
+                            </svg>
+                            <span className="text-emerald-400">Passing</span>
+                          </>
+                        ) : activePatch.typecheck_passed === false ? (
+                          <>
+                            <svg className="w-3.5 h-3.5 text-rose-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
+                              <line x1="18" y1="6" x2="6" y2="18" />
+                              <line x1="6" y1="6" x2="18" y2="18" />
+                            </svg>
+                            <span className="text-rose-400">Failed</span>
+                          </>
+                        ) : (
+                          <span className="text-[#71717A]">&mdash; Bypassed / None</span>
+                        )}
                       </span>
                     </div>
                   </div>

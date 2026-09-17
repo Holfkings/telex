@@ -77,6 +77,7 @@ async def run(payload: dict) -> None:
         code_snippet = code_usage.snippet or ""
         repo_requires_tests = repo.requires_tests
         repo_requires_typecheck = repo.requires_typecheck
+        repo_allow_install_scripts = getattr(repo, "allow_install_scripts", False)
         diff = patch.diff
 
         # 1. Structural check
@@ -154,7 +155,11 @@ async def run(payload: dict) -> None:
 
             # 4. Detect repository ecosystem and generate dynamic verification workflow
             env_info = await asyncio.to_thread(
-                detect_repo_environment, repo_full_name, installation_github_id, repo_default_branch
+                detect_repo_environment,
+                repo_full_name,
+                installation_github_id,
+                repo_default_branch,
+                repo_allow_install_scripts,
             )
             workflow_id = patch_id.hex[:10]
             branch_name = f"telex/validate-{workflow_id}"

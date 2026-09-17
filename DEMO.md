@@ -6,7 +6,7 @@ This guide walks through evaluating Telex end-to-end:
 
 ---
 
-## 🚀 Live Demo URLs
+## Live Demo URLs
 - **Telex Dashboard**: [https://telex-pi.vercel.app](https://telex-pi.vercel.app)
 - **Backend API**: [https://telex-api.onrender.com](https://telex-api.onrender.com)
 - **API Health**: [https://telex-api.onrender.com/health](https://telex-api.onrender.com/health)

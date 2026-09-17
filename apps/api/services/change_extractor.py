@@ -9,6 +9,36 @@ import re
 
 logger = logging.getLogger(__name__)
 
+# Change types that are always considered semantically risky regardless of confidence.
+_ALWAYS_SEMANTIC: frozenset[str] = frozenset({"behavior_change"})
+
+# Change types that are only risky when the model itself is uncertain (confidence < threshold).
+_UNCERTAIN_SEMANTIC: frozenset[str] = frozenset({"signature_change", "deprecated"})
+
+_CONFIDENCE_THRESHOLD = 0.75
+
+
+def classify_risk(change_type: str, confidence: float) -> bool:
+    """
+    Derive a boolean semantic-risk flag from the Gemini classifier output.
+
+    Returns True if:
+    - change_type is "behavior_change" (always risky — passing tests don't
+      guarantee old behavior is preserved), OR
+    - change_type is "signature_change" or "deprecated" AND confidence < 0.75
+      (the model itself is not sure it is purely mechanical).
+
+    Returns False for "removed", "renamed", or high-confidence mechanical changes.
+
+    This is a pure function with no I/O — unit-test friendly.
+    """
+    if change_type in _ALWAYS_SEMANTIC:
+        return True
+    if change_type in _UNCERTAIN_SEMANTIC and confidence < _CONFIDENCE_THRESHOLD:
+        return True
+    return False
+
+
 EXTRACT_PROMPT = """You are analyzing a package changelog to extract breaking API changes.
 
 PACKAGE: {package_name}

@@ -100,12 +100,47 @@ def get_installation_client(installation_id: int):
     return gh
 
 
+def requires_human_review(
+    tests_passed: bool | None,
+    typecheck_passed: bool | None,
+    is_semantic_risk: bool,
+    has_test_coverage_on_changed_symbol: bool,
+) -> bool:
+    """
+    Gate function: returns True when there is weak evidence that the patch is
+    safe to merge without human inspection.
+
+    Triggers when ANY of:
+    - tests_passed is None (no test run recorded) or False (tests failed)
+    - is_semantic_risk is True (Gemini classifier flagged a possible behavior change)
+    - has_test_coverage_on_changed_symbol is False
+
+    NOTE: has_test_coverage_on_changed_symbol is currently stubbed to always pass
+    False from the caller (unknown / treat as no coverage). This is an open gap —
+    real per-symbol coverage instrumentation has not been implemented yet.
+    """
+    if tests_passed is None or tests_passed is False:
+        return True
+    if typecheck_passed is None or typecheck_passed is False:
+        return True
+    if is_semantic_risk:
+        return True
+    if not has_test_coverage_on_changed_symbol:
+        return True
+    return False
+
+
 async def open_patch_pr(
     repo_full_name: str,
     installation_id: int,
     branch_name: str,
     patches: list[dict],
     summary: str,
+    title: str | None = None,
+    is_semantic_risk: bool = False,
+    tests_passed: bool | None = None,
+    typecheck_passed: bool | None = None,
+    allow_install_scripts: bool = False,
 ) -> tuple[str, int]:
     """
     Open a pull request on `repo_full_name` with the given patches applied.
@@ -115,6 +150,12 @@ async def open_patch_pr(
         - new_content: str   (full file content after applying the patch)
         - package_name: str
         - new_version: str
+
+    When `is_semantic_risk` is True the PR title is prefixed with [semantic-risk]
+    (if a custom `title` was not already provided with that prefix).
+
+    When `requires_human_review` determines that human sign-off is needed, the
+    label `needs-human-review` is added to the PR.
 
     Returns:
         (pr_html_url, pr_number)
@@ -155,9 +196,15 @@ async def open_patch_pr(
             )
 
         # Create or find existing PR for this branch (retry-safe)
+        pr_title = (
+            title
+            or f"chore(deps): auto-patch for {patches[0]['package_name']}@{patches[0]['new_version']}"
+        )
+        if is_semantic_risk and not pr_title.startswith("[semantic-risk]"):
+            pr_title = f"[semantic-risk] {pr_title}"
         try:
             pr = repo.create_pull(
-                title=f"chore(deps): auto-patch for {patches[0]['package_name']}@{patches[0]['new_version']}",
+                title=pr_title,
                 body=summary,
                 head=branch_name,
                 base=repo.default_branch,
@@ -171,6 +218,35 @@ async def open_patch_pr(
                     raise
             else:
                 raise
+
+        # Apply needs-human-review label when the gate fires
+        _needs_review = requires_human_review(
+            tests_passed=tests_passed,
+            typecheck_passed=typecheck_passed,
+            is_semantic_risk=is_semantic_risk,
+            has_test_coverage_on_changed_symbol=False,  # stub — always unknown
+        )
+        if _needs_review:
+            try:
+                label = repo.get_label("needs-human-review")
+            except GithubException:
+                try:
+                    label = repo.create_label(
+                        name="needs-human-review",
+                        color="e11d48",
+                        description="Telex flagged this PR for human review before merge",
+                    )
+                except GithubException:
+                    # Concurrent worker may have created it first — re-fetch
+                    try:
+                        label = repo.get_label("needs-human-review")
+                    except GithubException as label_err:
+                        logger.error(
+                            "open_patch_pr: failed to fetch or create needs-human-review label: %s",
+                            label_err,
+                        )
+                        raise
+            pr.add_to_labels(label)
 
         logger.info("PR #%d on %s: %s", pr.number, repo_full_name, pr.html_url)
         return pr.html_url, pr.number
@@ -304,16 +380,23 @@ def detect_repo_environment(
     repo_full_name: str,
     installation_id: int,
     ref: str = "main",
+    allow_install_scripts: bool = False,
 ) -> dict:
     """
     Inspect target repository via GitHub API to detect ecosystem, package manager, and test scripts.
+
+    When `allow_install_scripts` is False (the default), lifecycle scripts are
+    blocked by appending ``--ignore-scripts`` to every npm / pnpm / yarn install
+    command so untrusted ``postinstall`` scripts cannot execute.  Set
+    ``allow_install_scripts=True`` (opt-in, per-repo) to restore the original
+    behaviour.
     """
     import json
 
     env_info = {
         "ecosystem": "node",
         "package_manager": "npm",
-        "install_cmd": "npm ci",
+        "install_cmd": "npm ci" if allow_install_scripts else "npm ci --ignore-scripts",
         "test_cmd": "npm test",
         "typecheck_cmd": "npx tsc --noEmit",
         "has_test": True,
@@ -337,7 +420,12 @@ def detect_repo_environment(
 
                     if "pnpm-lock.yaml" in file_names:
                         pm = "pnpm"
-                        install_cmd = "pnpm install --frozen-lockfile"
+                        _base_install = "pnpm install --frozen-lockfile"
+                        install_cmd = (
+                            _base_install
+                            if allow_install_scripts
+                            else f"{_base_install} --ignore-scripts"
+                        )
                         test_cmd = "pnpm test" if "test" in scripts else ""
                         typecheck_cmd = (
                             "pnpm run typecheck"
@@ -346,14 +434,24 @@ def detect_repo_environment(
                         )
                     elif "yarn.lock" in file_names:
                         pm = "yarn"
-                        install_cmd = "yarn install --frozen-lockfile"
+                        _base_install = "yarn install --frozen-lockfile"
+                        install_cmd = (
+                            _base_install
+                            if allow_install_scripts
+                            else f"{_base_install} --ignore-scripts"
+                        )
                         test_cmd = "yarn test" if "test" in scripts else ""
                         typecheck_cmd = (
                             "yarn typecheck" if "typecheck" in scripts else "yarn tsc --noEmit"
                         )
                     else:
                         pm = "npm"
-                        install_cmd = "npm ci"
+                        _base_install = "npm ci"
+                        install_cmd = (
+                            _base_install
+                            if allow_install_scripts
+                            else f"{_base_install} --ignore-scripts"
+                        )
                         test_cmd = "npm test" if "test" in scripts else ""
                         typecheck_cmd = (
                             "npm run typecheck" if "typecheck" in scripts else "npx tsc --noEmit"
@@ -377,11 +475,14 @@ def detect_repo_environment(
                     logger.warning("detect_repo_environment: failed to parse package.json: %s", e)
 
         elif "pyproject.toml" in file_names or "requirements.txt" in file_names:
-            install_cmd = (
-                "pip install -r requirements.txt"
-                if "requirements.txt" in file_names
-                else "pip install -e ."
-            )
+            if allow_install_scripts:
+                install_cmd = (
+                    "pip install -r requirements.txt"
+                    if "requirements.txt" in file_names
+                    else "pip install -e ."
+                )
+            else:
+                install_cmd = "echo 'Dependency installation skipped: allow_install_scripts is false (requires opt-in)'"
             return {
                 "ecosystem": "python",
                 "package_manager": "pip",
@@ -409,7 +510,7 @@ def generate_telex_verification_workflow(
 ) -> str:
     """Generate a self-contained GitHub Actions YAML workflow for verification on branch_name."""
     ecosystem = env_info.get("ecosystem", "node")
-    install_cmd = env_info.get("install_cmd", "npm ci")
+    install_cmd = env_info.get("install_cmd", "npm ci --ignore-scripts")
     test_cmd = env_info.get("test_cmd", "npm test")
     typecheck_cmd = env_info.get("typecheck_cmd", "npx tsc --noEmit")
 

@@ -163,7 +163,10 @@ export default function DashboardLayout({
               }}
               className="w-full py-2.5 px-4 rounded-xl bg-white text-black font-mono font-semibold text-xs tracking-wider uppercase transition-all hover:bg-white/90 hover:shadow-[0_0_20px_rgba(255,255,255,0.3)] active:scale-[0.98] flex items-center justify-center gap-2 cursor-pointer"
             >
-              <span>⚡ Sign In as Operator (Instant Localhost) →</span>
+              <svg className="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+              </svg>
+              <span>Sign In as Operator (Instant Localhost) &rarr;</span>
             </button>
 
             <button

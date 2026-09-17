@@ -176,8 +176,7 @@ async def test_validate_patch_js_with_tests_produces_full_verification(
 
     disclosure = format_verification_disclosure(vr)
     assert (
-        "✅ Verified: repo's own test suite and type-checker both passed on this patch."
-        in disclosure
+        "[Verified] Repo's own test suite and type-checker both passed on this patch." in disclosure
     )
 
 
@@ -260,7 +259,7 @@ async def test_validate_patch_js_without_tests_produces_structural_only(
     from jobs.handlers.open_pr import format_verification_disclosure
 
     disclosure = format_verification_disclosure(vr)
-    assert "⚠️ No test suite detected in this repo" in disclosure
+    assert "[Warning] No test suite detected in this repo" in disclosure
 
 
 @pytest.mark.asyncio
