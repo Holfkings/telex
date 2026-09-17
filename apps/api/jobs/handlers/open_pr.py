@@ -48,6 +48,7 @@ async def run(payload: dict) -> None:
     )
     from db.session import AsyncSessionLocal
     from services.github_service import create_check_run, get_installation_client, open_patch_pr
+    from services.change_extractor import classify_risk
 
     repo_id = uuid.UUID(payload["repo_id"])
     pv_id_raw = payload.get("package_version_id")
@@ -140,6 +141,12 @@ async def run(payload: dict) -> None:
             if vr:
                 vr_map[p.id] = vr
 
+        # Pre-load the first detected change to derive classification signal
+        first_dc = None
+        first_cu = next((usage_map[p.id] for p in patches if p.id in usage_map), None)
+        if first_cu:
+            first_dc = await session.get(DetectedChange, first_cu.detected_change_id)
+
     # ── PyGithub calls run in a thread — they are blocking I/O ───────────────
     gh = await asyncio.to_thread(get_installation_client, installation_github_id)
     gh_repo = await asyncio.to_thread(gh.get_repo, repo_full_name)
@@ -185,11 +192,31 @@ async def run(payload: dict) -> None:
         )
         return
 
+    # ── Derive classification signal ─────────────────────────────────────────
+    dc_change_type = first_dc.change_type if first_dc else "unknown"
+    dc_confidence = first_dc.confidence if first_dc else 0.8
+    is_semantic_risk = classify_risk(dc_change_type, dc_confidence)
+
     # Build PR body with explicit verification evidence
+    risk_flag = (
+        "⚠️ Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
+        if is_semantic_risk
+        else "✅ Mechanical change"
+    )
+    classification_table = (
+        "## Change classification\n"
+        "| Field | Value |\n"
+        "|---|---|\n"
+        f"| Change type | {dc_change_type} |\n"
+        f"| Classifier confidence | {dc_confidence:.0%} |\n"
+        f"| Risk flag | {risk_flag} |\n"
+    )
+
     body_lines = [
         f"## Telex Auto-Patch: `{pkg_name}` → `{pv_version}`\n",
         "Telex detected breaking API changes / runtime defects and generated the following patches.\n",
         "**Review each diff carefully before merging. Never auto-merge.**\n",
+        classification_table,
     ]
     for i, pd in enumerate(patch_dicts, 1):
         vr = pd.get("validation")
@@ -222,6 +249,11 @@ async def run(payload: dict) -> None:
 
     summary = "\n".join(body_lines)
 
+    # Prefix title with [semantic-risk] if the classifier flagged this change.
+    pr_title = f"chore(deps): auto-patch for {patches[0]['package_name'] if patches else pkg_name}@{pv_version}"
+    if is_semantic_risk:
+        pr_title = f"[semantic-risk] {pr_title}"
+
     # Include a short unique ID so concurrent defects don't collide on the same branch.
     unique_id_source = cu_id_raw or str(uuid.uuid4())
     short_id = unique_id_source.split("-")[0]  # e.g. "a3f2c1b8"
@@ -234,6 +266,7 @@ async def run(payload: dict) -> None:
             branch_name=branch_name,
             patches=patch_dicts,
             summary=summary,
+            title=pr_title,
         )
     except Exception as exc:
         logger.error("open_pr: failed to open PR: %s", exc)

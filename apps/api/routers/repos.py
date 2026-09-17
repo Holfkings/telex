@@ -24,6 +24,7 @@ from services.repo_service import (
     get_core_repositories_async,
     sync_github_app_repositories_async,
 )
+from services.change_extractor import classify_risk
 
 router = APIRouter(prefix="/api/repos", tags=["repos"])
 
@@ -245,6 +246,12 @@ async def list_patches(repo_id: str):
                             typecheck_passed=vr_row.typechecks if vr_row else None,
                             change_type=dc_row.change_type if dc_row else None,
                             change_description=dc_row.description if dc_row else None,
+                            confidence=dc_row.confidence if dc_row else None,
+                            is_semantic_risk=(
+                                classify_risk(dc_row.change_type, dc_row.confidence)
+                                if dc_row
+                                else None
+                            ),
                         )
                     )
 

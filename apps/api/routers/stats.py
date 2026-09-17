@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from db.models import DetectedChange, Patch, PullRequest, Repo
 from db.session import get_session
 from schemas import DetectedChangeSummary, StatsOut
+from services.change_extractor import classify_risk
 
 router = APIRouter(prefix="/api", tags=["stats"])
 
@@ -45,6 +46,8 @@ async def get_stats(session: AsyncSession = Depends(get_session)):
             change_type=dc.change_type,
             description=dc.description,
             created_at=dc.created_at,
+            confidence=dc.confidence,
+            is_semantic_risk=classify_risk(dc.change_type, dc.confidence),
         )
         for dc in dc_res.scalars().all()
     ]

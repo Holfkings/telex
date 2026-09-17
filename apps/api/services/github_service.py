@@ -106,6 +106,7 @@ async def open_patch_pr(
     branch_name: str,
     patches: list[dict],
     summary: str,
+    title: str | None = None,
 ) -> tuple[str, int]:
     """
     Open a pull request on `repo_full_name` with the given patches applied.
@@ -155,9 +156,10 @@ async def open_patch_pr(
             )
 
         # Create or find existing PR for this branch (retry-safe)
+        pr_title = title or f"chore(deps): auto-patch for {patches[0]['package_name']}@{patches[0]['new_version']}"
         try:
             pr = repo.create_pull(
-                title=f"chore(deps): auto-patch for {patches[0]['package_name']}@{patches[0]['new_version']}",
+                title=pr_title,
                 body=summary,
                 head=branch_name,
                 base=repo.default_branch,

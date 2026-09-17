@@ -101,6 +101,8 @@ class PatchOut(BaseModel):
     typecheck_passed: bool | None = None
     change_type: str | None = None
     change_description: str | None = None
+    confidence: float | None = None
+    is_semantic_risk: bool | None = None
 
 
 class RepoPatchesOut(BaseModel):
@@ -118,6 +120,8 @@ class DetectedChangeSummary(BaseModel):
     change_type: str
     description: str
     created_at: datetime
+    confidence: float | None = None
+    is_semantic_risk: bool | None = None
 
 
 class StatsOut(BaseModel):
