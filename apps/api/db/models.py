@@ -113,6 +113,7 @@ class Repo(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     requires_tests: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     requires_typecheck: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    allow_install_scripts: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), server_default=func.now(), nullable=False
     )

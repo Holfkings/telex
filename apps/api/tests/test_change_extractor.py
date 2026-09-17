@@ -193,4 +193,3 @@ def test_pr_body_high_confidence_signature_change_is_mechanical():
     title, table = _build_pr_body("signature_change", 0.90)
     assert not title.startswith("[semantic-risk]")
     assert "✅ Mechanical change" in table
-

@@ -77,6 +77,7 @@ async def verify_patch_via_github(
     file_path: str = "src/index.ts",
     requires_tests: bool = False,
     requires_typecheck: bool = False,
+    allow_install_scripts: bool = False,
 ) -> dict:
     """
     Execute the Verification Gate using Dynamic GitHub Actions (Zero-Memory on Render):
@@ -151,7 +152,11 @@ async def verify_patch_via_github(
 
         # 3. Detect repository ecosystem and generate dynamic verification workflow
         env_info = await asyncio.to_thread(
-            detect_repo_environment, repo_full_name, installation_github_id, default_branch
+            detect_repo_environment,
+            repo_full_name,
+            installation_github_id,
+            default_branch,
+            allow_install_scripts,
         )
         workflow_id = uuid.uuid4().hex[:8]
         verify_branch = f"telex/verify/{workflow_id}"

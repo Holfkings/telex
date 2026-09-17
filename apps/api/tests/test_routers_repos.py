@@ -189,13 +189,19 @@ async def test_update_repo_settings():
             async with AsyncClient(transport=transport, base_url="http://test") as client:
                 resp = await client.patch(
                     f"/api/repos/{repo_uuid}",
-                    json={"requires_tests": True, "requires_typecheck": True, "is_active": False},
+                    json={
+                        "requires_tests": True,
+                        "requires_typecheck": True,
+                        "is_active": False,
+                        "allow_install_scripts": True,
+                    },
                 )
                 assert resp.status_code == 200
                 data = resp.json()
                 assert data["requires_tests"] is True
                 assert data["requires_typecheck"] is True
                 assert data["is_active"] is False
+                assert data["allow_install_scripts"] is True
     finally:
         app.dependency_overrides.pop(require_auth, None)
 

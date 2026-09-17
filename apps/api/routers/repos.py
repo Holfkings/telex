@@ -19,12 +19,12 @@ from schemas import (
     RepoToggleIn,
     RepoUpdateIn,
 )
+from services.change_extractor import classify_risk
 from services.repo_service import (
     explain_repo_with_gemini,
     get_core_repositories_async,
     sync_github_app_repositories_async,
 )
-from services.change_extractor import classify_risk
 
 router = APIRouter(prefix="/api/repos", tags=["repos"])
 
@@ -128,6 +128,8 @@ async def update_repo_settings(repo_id: str, body: RepoUpdateIn):
             repo.requires_typecheck = body.requires_typecheck
         if body.is_active is not None:
             repo.is_active = body.is_active
+        if body.allow_install_scripts is not None:
+            repo.allow_install_scripts = body.allow_install_scripts
 
         await session.commit()
         return {
@@ -136,6 +138,7 @@ async def update_repo_settings(repo_id: str, body: RepoUpdateIn):
             "requires_tests": repo.requires_tests,
             "requires_typecheck": repo.requires_typecheck,
             "is_active": repo.is_active,
+            "allow_install_scripts": repo.allow_install_scripts,
         }
 
 

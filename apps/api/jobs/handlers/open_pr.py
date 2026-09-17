@@ -47,8 +47,8 @@ async def run(payload: dict) -> None:
         Repo,
     )
     from db.session import AsyncSessionLocal
-    from services.github_service import create_check_run, get_installation_client, open_patch_pr
     from services.change_extractor import classify_risk
+    from services.github_service import create_check_run, get_installation_client, open_patch_pr
 
     repo_id = uuid.UUID(payload["repo_id"])
     pv_id_raw = payload.get("package_version_id")
@@ -197,12 +197,20 @@ async def run(payload: dict) -> None:
     dc_confidence = first_dc.confidence if first_dc else 0.8
     is_semantic_risk = classify_risk(dc_change_type, dc_confidence)
 
+    # Determine test/typecheck evidence from the first validation run (if any)
+    first_vr = next((vr_map[p.id] for p in patches if p.id in vr_map), None)
+    _tests_passed = getattr(first_vr, "tests_pass", None) if first_vr else None
+    _typecheck_passed = getattr(first_vr, "typechecks", None) if first_vr else None
+
     # Build PR body with explicit verification evidence
     risk_flag = (
         "⚠️ Possible semantic/behavior change — passing tests do not guarantee old behavior is preserved"
         if is_semantic_risk
         else "✅ Mechanical change"
     )
+    repo_allow_scripts = getattr(repo, "allow_install_scripts", False) if repo else False
+    install_scripts_str = "allowed (opt-in)" if repo_allow_scripts else "blocked (default)"
+
     classification_table = (
         "## Change classification\n"
         "| Field | Value |\n"
@@ -210,7 +218,19 @@ async def run(payload: dict) -> None:
         f"| Change type | {dc_change_type} |\n"
         f"| Classifier confidence | {dc_confidence:.0%} |\n"
         f"| Risk flag | {risk_flag} |\n"
+        f"| Install scripts | {install_scripts_str} |\n"
     )
+
+    from services.github_service import requires_human_review as _requires_human_review
+
+    _needs_review = _requires_human_review(
+        tests_passed=_tests_passed,
+        typecheck_passed=_typecheck_passed,
+        is_semantic_risk=is_semantic_risk,
+        has_test_coverage_on_changed_symbol=False,
+    )
+    if _needs_review:
+        classification_table += "\n> 🔍 Human review required before merge — see risk flag above.\n"
 
     body_lines = [
         f"## Telex Auto-Patch: `{pkg_name}` → `{pv_version}`\n",
@@ -245,12 +265,14 @@ async def run(payload: dict) -> None:
         body_lines.append(f"\n### Patch {i}: `{pd['file_path']}`\n")
         if vr_evidence:
             body_lines.append("**Verification Gate Evidence:**\n" + "\n".join(vr_evidence) + "\n")
+        else:
+            body_lines.append("**Verification Gate Evidence:** No verification run recorded.\n")
         body_lines.append(f"```diff\n{pd['diff']}\n```\n")
 
     summary = "\n".join(body_lines)
 
     # Prefix title with [semantic-risk] if the classifier flagged this change.
-    pr_title = f"chore(deps): auto-patch for {patches[0]['package_name'] if patches else pkg_name}@{pv_version}"
+    pr_title = f"chore(deps): auto-patch for {pkg_name}@{pv_version}"
     if is_semantic_risk:
         pr_title = f"[semantic-risk] {pr_title}"
 
@@ -267,6 +289,10 @@ async def run(payload: dict) -> None:
             patches=patch_dicts,
             summary=summary,
             title=pr_title,
+            is_semantic_risk=is_semantic_risk,
+            tests_passed=_tests_passed,
+            typecheck_passed=_typecheck_passed,
+            allow_install_scripts=repo_allow_scripts,
         )
     except Exception as exc:
         logger.error("open_pr: failed to open PR: %s", exc)

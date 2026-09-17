@@ -44,6 +44,7 @@ class RepoOut(BaseModel):
     is_active: bool = True
     requires_tests: bool = False
     requires_typecheck: bool = False
+    allow_install_scripts: bool = False
     created_at: datetime
     github_url: str
     languages: list[str] = []
@@ -59,6 +60,7 @@ class RepoUpdateIn(BaseModel):
     requires_tests: bool | None = None
     requires_typecheck: bool | None = None
     is_active: bool | None = None
+    allow_install_scripts: bool | None = None
 
 
 class RepoDetailOut(RepoOut):
