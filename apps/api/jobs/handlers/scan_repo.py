@@ -5,6 +5,7 @@ each detected_change in a package version.
 Payload shape:
     { "repo_id": "<uuid>", "package_version_id": "<uuid>" }
 """
+
 import asyncio
 import logging
 import uuid
@@ -19,12 +20,13 @@ SCAN_EXTENSIONS = {".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".py"}
 
 
 async def run(payload: dict) -> None:
+    from sqlalchemy import select
+
+    from db.models import CodeUsage, DetectedChange, Installation, PackageVersion, Repo
     from db.session import AsyncSessionLocal
-    from db.models import Repo, DetectedChange, CodeUsage, PackageVersion, Installation
+    from jobs.queue import enqueue_job
     from services.code_scanner import find_usages
     from services.github_service import get_installation_client
-    from jobs.queue import enqueue_job
-    from sqlalchemy import select
 
     repo_id = uuid.UUID(payload["repo_id"])
     package_version_id = uuid.UUID(payload["package_version_id"])
@@ -41,9 +43,7 @@ async def run(payload: dict) -> None:
             return
 
         changes_result = await session.execute(
-            select(DetectedChange).where(
-                DetectedChange.package_version_id == package_version_id
-            )
+            select(DetectedChange).where(DetectedChange.package_version_id == package_version_id)
         )
         changes = list(changes_result.scalars())
         if not changes:
@@ -71,16 +71,16 @@ async def run(payload: dict) -> None:
         repo = await session.get(Repo, repo_id)
         pv = await session.get(PackageVersion, package_version_id)
         changes_result = await session.execute(
-            select(DetectedChange).where(
-                DetectedChange.package_version_id == package_version_id
-            )
+            select(DetectedChange).where(DetectedChange.package_version_id == package_version_id)
         )
         changes = list(changes_result.scalars())
 
         # Walk the default branch tree and scan each eligible file
         total_usages = 0
         try:
-            tree = await asyncio.to_thread(gh_repo.get_git_tree, repo_default_branch, recursive=True)
+            tree = await asyncio.to_thread(
+                gh_repo.get_git_tree, repo_default_branch, recursive=True
+            )
         except Exception as exc:
             logger.error("scan_repo: failed to fetch git tree for %s: %s", repo_full_name, exc)
             return

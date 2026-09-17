@@ -1,6 +1,7 @@
 """
 Tests for Phase 4: Sandbox validation pipeline, validate_patch handler, and PR body verification disclosures.
 """
+
 import uuid
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
@@ -89,7 +90,9 @@ def create_mock_session(entities):
 
 
 @pytest.mark.asyncio
-async def test_validate_patch_js_with_tests_produces_full_verification(base_patch_setup, monkeypatch):
+async def test_validate_patch_js_with_tests_produces_full_verification(
+    base_patch_setup, monkeypatch
+):
     """
     JS fixture with tests:
     - has_test=True, has_typecheck=True
@@ -106,7 +109,9 @@ async def test_validate_patch_js_with_tests_produces_full_verification(base_patc
     mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
     monkeypatch.setattr("db.session.AsyncSessionLocal", lambda: mock_session_ctx)
-    monkeypatch.setattr(gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet)
+    monkeypatch.setattr(
+        gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet
+    )
     monkeypatch.setattr(
         gh_svc,
         "detect_repo_environment",
@@ -121,7 +126,9 @@ async def test_validate_patch_js_with_tests_produces_full_verification(base_patc
         },
     )
     monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
-    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(
+        gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456"
+    )
     monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
 
     async def mock_wait_ci(*args, **kwargs):
@@ -133,7 +140,9 @@ async def test_validate_patch_js_with_tests_produces_full_verification(base_patc
             "typechecks": True,
             "tests_pass": True,
             "log": "Verification Check [Telex Verification Gate]: passed",
-            "check_runs": [{"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}],
+            "check_runs": [
+                {"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}
+            ],
         }
 
     monkeypatch.setattr(gh_svc, "wait_for_telex_verification", mock_wait_ci)
@@ -164,12 +173,18 @@ async def test_validate_patch_js_with_tests_produces_full_verification(base_patc
 
     # Verify PR body disclosure format via production helper
     from jobs.handlers.open_pr import format_verification_disclosure
+
     disclosure = format_verification_disclosure(vr)
-    assert "✅ Verified: repo's own test suite and type-checker both passed on this patch." in disclosure
+    assert (
+        "✅ Verified: repo's own test suite and type-checker both passed on this patch."
+        in disclosure
+    )
 
 
 @pytest.mark.asyncio
-async def test_validate_patch_js_without_tests_produces_structural_only(base_patch_setup, monkeypatch):
+async def test_validate_patch_js_without_tests_produces_structural_only(
+    base_patch_setup, monkeypatch
+):
     """
     JS fixture without tests:
     - has_test=False, has_typecheck=True
@@ -186,7 +201,9 @@ async def test_validate_patch_js_without_tests_produces_structural_only(base_pat
     mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
     monkeypatch.setattr("db.session.AsyncSessionLocal", lambda: mock_session_ctx)
-    monkeypatch.setattr(gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet)
+    monkeypatch.setattr(
+        gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet
+    )
     monkeypatch.setattr(
         gh_svc,
         "detect_repo_environment",
@@ -201,7 +218,9 @@ async def test_validate_patch_js_without_tests_produces_structural_only(base_pat
         },
     )
     monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
-    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(
+        gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456"
+    )
     monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
 
     async def mock_wait_ci(*args, **kwargs):
@@ -213,7 +232,9 @@ async def test_validate_patch_js_without_tests_produces_structural_only(base_pat
             "typechecks": True,
             "tests_pass": None,
             "log": "Verification Check: typecheck passed",
-            "check_runs": [{"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}],
+            "check_runs": [
+                {"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}
+            ],
         }
 
     monkeypatch.setattr(gh_svc, "wait_for_telex_verification", mock_wait_ci)
@@ -237,12 +258,15 @@ async def test_validate_patch_js_without_tests_produces_structural_only(base_pat
 
     # Verify PR disclosure formatting via production helper
     from jobs.handlers.open_pr import format_verification_disclosure
+
     disclosure = format_verification_disclosure(vr)
     assert "⚠️ No test suite detected in this repo" in disclosure
 
 
 @pytest.mark.asyncio
-async def test_validate_patch_python_with_tests_produces_full_verification(base_patch_setup, monkeypatch):
+async def test_validate_patch_python_with_tests_produces_full_verification(
+    base_patch_setup, monkeypatch
+):
     """
     Python fixture with tests:
     - has_test=True
@@ -265,7 +289,9 @@ async def test_validate_patch_python_with_tests_produces_full_verification(base_
     mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
     monkeypatch.setattr("db.session.AsyncSessionLocal", lambda: mock_session_ctx)
-    monkeypatch.setattr(gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet)
+    monkeypatch.setattr(
+        gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet
+    )
     monkeypatch.setattr(
         gh_svc,
         "detect_repo_environment",
@@ -280,7 +306,9 @@ async def test_validate_patch_python_with_tests_produces_full_verification(base_
         },
     )
     monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
-    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(
+        gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456"
+    )
     monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
 
     async def mock_wait_ci(*args, **kwargs):
@@ -292,7 +320,9 @@ async def test_validate_patch_python_with_tests_produces_full_verification(base_
             "typechecks": None,
             "tests_pass": True,
             "log": "Verification Check: pytest passed",
-            "check_runs": [{"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}],
+            "check_runs": [
+                {"name": "Telex Verification Gate", "status": "completed", "conclusion": "success"}
+            ],
         }
 
     monkeypatch.setattr(gh_svc, "wait_for_telex_verification", mock_wait_ci)
@@ -316,7 +346,9 @@ async def test_validate_patch_python_with_tests_produces_full_verification(base_
 
 
 @pytest.mark.asyncio
-async def test_validate_patch_gating_requires_tests_fails_when_untested(base_patch_setup, monkeypatch):
+async def test_validate_patch_gating_requires_tests_fails_when_untested(
+    base_patch_setup, monkeypatch
+):
     """
     Repo policy requires_tests=True:
     If tests do not pass or are missing, patch must NOT be verified and open_pr must NOT be enqueued.
@@ -332,7 +364,9 @@ async def test_validate_patch_gating_requires_tests_fails_when_untested(base_pat
     mock_session_ctx.__aexit__ = AsyncMock(return_value=None)
 
     monkeypatch.setattr("db.session.AsyncSessionLocal", lambda: mock_session_ctx)
-    monkeypatch.setattr(gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet)
+    monkeypatch.setattr(
+        gh_svc, "fetch_file_content", lambda *args, **kwargs: entities["code_usage"].snippet
+    )
     monkeypatch.setattr(
         gh_svc,
         "detect_repo_environment",
@@ -347,7 +381,9 @@ async def test_validate_patch_gating_requires_tests_fails_when_untested(base_pat
         },
     )
     monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
-    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(
+        gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456"
+    )
     monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
 
     async def mock_wait_ci(*args, **kwargs):
@@ -379,7 +415,9 @@ async def test_validate_patch_gating_requires_tests_fails_when_untested(base_pat
 
 
 @pytest.mark.asyncio
-async def test_validate_patch_incomplete_workflow_fails_even_without_requirements(base_patch_setup, monkeypatch):
+async def test_validate_patch_incomplete_workflow_fails_even_without_requirements(
+    base_patch_setup, monkeypatch
+):
     """
     Regression test:
     When wait_for_telex_verification returns completed=False and conclusion=None,
@@ -412,7 +450,9 @@ async def test_validate_patch_incomplete_workflow_fails_even_without_requirement
         },
     )
     monkeypatch.setattr(gh_svc, "create_or_update_branch", lambda *args, **kwargs: "sha-base-123")
-    monkeypatch.setattr(gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456")
+    monkeypatch.setattr(
+        gh_svc, "commit_verification_bundle", lambda *args, **kwargs: "sha-commit-456"
+    )
     monkeypatch.setattr(gh_svc, "delete_branch", lambda *args, **kwargs: True)
 
     async def mock_wait_ci_incomplete(*args, **kwargs):

@@ -5,6 +5,7 @@ Payload shape:
     { "repo_id": "<uuid>", "package_version_id": "<uuid>" }
     or: { "repo_id": "<uuid>", "code_usage_id": "<uuid>" }
 """
+
 import asyncio
 import logging
 import uuid
@@ -33,13 +34,20 @@ def format_verification_disclosure(vr) -> str:
 
 
 async def run(payload: dict) -> None:
-    from db.session import AsyncSessionLocal
-    from db.models import (
-        Repo, PackageVersion, Package, DetectedChange,
-        CodeUsage, Patch, PullRequest, Installation,
-    )
-    from services.github_service import open_patch_pr, get_installation_client, create_check_run
     from sqlalchemy import select
+
+    from db.models import (
+        CodeUsage,
+        DetectedChange,
+        Installation,
+        Package,
+        PackageVersion,
+        Patch,
+        PullRequest,
+        Repo,
+    )
+    from db.session import AsyncSessionLocal
+    from services.github_service import create_check_run, get_installation_client, open_patch_pr
 
     repo_id = uuid.UUID(payload["repo_id"])
     pv_id_raw = payload.get("package_version_id")
@@ -105,13 +113,19 @@ async def run(payload: dict) -> None:
         patches = list(patches_result.scalars())
 
         if not patches:
-            logger.info("open_pr: no verified patches for repo %s (version=%s, usage=%s)", repo_id, package_version_id, code_usage_id)
+            logger.info(
+                "open_pr: no verified patches for repo %s (version=%s, usage=%s)",
+                repo_id,
+                package_version_id,
+                code_usage_id,
+            )
             return
 
         # Pre-load CodeUsage and ValidationRun rows
         usage_map: dict = {}
         vr_map: dict = {}
         from db.models import ValidationRun
+
         for p in patches:
             cu = await session.get(CodeUsage, p.code_usage_id)
             if cu:
@@ -130,7 +144,7 @@ async def run(payload: dict) -> None:
     gh = await asyncio.to_thread(get_installation_client, installation_github_id)
     gh_repo = await asyncio.to_thread(gh.get_repo, repo_full_name)
 
-    from services.github_service import open_patch_pr, get_installation_client, apply_diff_to_content
+    from services.github_service import apply_diff_to_content, get_installation_client
 
     patch_dicts: list[dict] = []
     for p in patches:
@@ -185,13 +199,19 @@ async def run(payload: dict) -> None:
             disclosure_text = format_verification_disclosure(vr)
             vr_evidence.append(f"- **Verification Status**: {disclosure_text}")
             vr_evidence.append(f"- **Verification Mode**: `{mode_display}`")
-            vr_evidence.append(f"- **Applied Cleanly**: {'✓ Passed' if vr.applies_cleanly else '✗ Failed'}")
+            vr_evidence.append(
+                f"- **Applied Cleanly**: {'✓ Passed' if vr.applies_cleanly else '✗ Failed'}"
+            )
             if vr.typechecks is not None:
-                vr_evidence.append(f"- **Typecheck**: {'✓ Passed' if vr.typechecks else '✗ Failed'}")
+                vr_evidence.append(
+                    f"- **Typecheck**: {'✓ Passed' if vr.typechecks else '✗ Failed'}"
+                )
             else:
                 vr_evidence.append("- **Typecheck**: N/A (no config found)")
             if vr.tests_pass is not None:
-                vr_evidence.append(f"- **Automated Tests**: {'✓ Passed' if vr.tests_pass else '✗ Failed'}")
+                vr_evidence.append(
+                    f"- **Automated Tests**: {'✓ Passed' if vr.tests_pass else '✗ Failed'}"
+                )
             else:
                 vr_evidence.append("- **Automated Tests**: N/A (no test suite found)")
 
@@ -224,11 +244,13 @@ async def run(payload: dict) -> None:
     # in the PR's "Checks" tab alongside the repo's own CI.
     try:
         import asyncio as _asyncio
+
         def _get_head_sha():
             gh = get_installation_client(installation_github_id)
             repo_obj = gh.get_repo(repo_full_name)
             branch_ref = repo_obj.get_branch(branch_name)
             return branch_ref.commit.sha
+
         head_sha = await _asyncio.to_thread(_get_head_sha)
 
         # Aggregate validations for all included patches (Comment 7 fix)
@@ -299,5 +321,3 @@ async def run(payload: dict) -> None:
         await session.commit()
 
     logger.info("open_pr: opened PR #%d on %s (%s)", pr_number, repo_full_name, pr_url)
-
-

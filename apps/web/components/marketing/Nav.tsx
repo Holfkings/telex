@@ -3,20 +3,12 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import TelexLogo from "@/components/ui/TelexLogo";
+import { getApiUrl } from "@/lib/api";
 
 const NAV_LINKS = [
   { href: "#how-it-works", label: "01 // Pipeline" },
   { href: "/dashboard", label: "02 // Dashboard" },
 ];
-
-function getApiUrl(): string {
-  return (
-    process.env.NEXT_PUBLIC_API_URL ||
-    (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-      ? "https://telex-api.onrender.com"
-      : "http://localhost:8000")
-  );
-}
 
 export default function Nav() {
   const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
@@ -24,16 +16,20 @@ export default function Nav() {
 
   useEffect(() => {
     const apiUrl = getApiUrl();
-
     fetch(`${apiUrl}/api/auth/me`, { credentials: "include" })
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Auth check failed");
+        return res.json();
+      })
       .then((data) => {
         if (data.authenticated && data.user?.github_login) {
           setUser(data.user.github_login);
+        } else {
+          setUser(null);
         }
       })
       .catch(() => {
-        // Auth check failed silently — treat as logged out, no error UI needed here.
+        setUser(null);
       });
   }, []);
 

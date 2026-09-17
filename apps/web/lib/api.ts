@@ -2,22 +2,21 @@
  * Typed API client for the FastAPI backend.
  */
 
-const API_BASE =
+export const API_BASE =
   process.env.NEXT_PUBLIC_API_URL ||
-  (typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
-    ? "https://telex-api.onrender.com"
-    : "http://localhost:8000");
+  (process.env.NODE_ENV === "development"
+    ? "http://localhost:8000"
+    : "https://telex-api.onrender.com");
+
+export function getApiUrl(): string {
+  return API_BASE;
+}
 
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
-  const token = typeof window !== "undefined" ? localStorage.getItem("telex_token") : null;
   const reqHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     ...((options?.headers as Record<string, string>) ?? {}),
   };
-
-  if (token && !reqHeaders["Authorization"]) {
-    reqHeaders["Authorization"] = `Bearer ${token}`;
-  }
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...options,
@@ -103,7 +102,18 @@ export interface AIExplanation {
   recommended_actions: string[];
 }
 
-export const getRepos = () => apiFetch<Repo[]>("/api/repos");
+export const getRepos = (sync: boolean = false, includeBenchmarks: boolean = false) => {
+  const params = new URLSearchParams();
+  if (sync) params.set("sync", "true");
+  if (includeBenchmarks) params.set("include_benchmarks", "true");
+  const qs = params.toString();
+  return apiFetch<Repo[]>(qs ? `/api/repos?${qs}` : "/api/repos");
+};
+
+export const syncRepos = (includeBenchmarks: boolean = false) => {
+  const qs = includeBenchmarks ? "?include_benchmarks=true" : "";
+  return apiFetch<Repo[]>(`/api/repos/sync${qs}`, { method: "POST" });
+};
 
 export const getRepoDetails = (id: string) => apiFetch<RepoDetails>(`/api/repos/${id}`);
 

@@ -6,15 +6,12 @@ stores the result with a real validation_run.
 Payload shape:
     { "code_usage_id": "<uuid>" }
 """
+
 import asyncio
 import logging
 import os
-import shutil
 import stat
-import subprocess
-import tempfile
 import uuid
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -40,13 +37,18 @@ def validate_patch(diff: str, snippet: str) -> tuple[bool, bool, bool]:
 
     lines = diff.splitlines()
     has_hunk = any(line.startswith("@@") for line in lines) or (
-        any(line.startswith("---") for line in lines) and any(line.startswith("+++") for line in lines)
+        any(line.startswith("---") for line in lines)
+        and any(line.startswith("+++") for line in lines)
     )
     if not has_hunk:
         return False, False, False
 
-    removed_lines = [line[1:].strip() for line in lines if line.startswith("-") and not line.startswith("---")]
-    added_lines = [line[1:].strip() for line in lines if line.startswith("+") and not line.startswith("+++")]
+    removed_lines = [
+        line[1:].strip() for line in lines if line.startswith("-") and not line.startswith("---")
+    ]
+    added_lines = [
+        line[1:].strip() for line in lines if line.startswith("+") and not line.startswith("+++")
+    ]
 
     if not added_lines and not removed_lines:
         return False, False, False
@@ -54,11 +56,10 @@ def validate_patch(diff: str, snippet: str) -> tuple[bool, bool, bool]:
     # Scope check: removed lines should match the original code snippet
     scope_ok = True
     if removed_lines:
-        snippet_lines = [l.strip() for l in snippet.splitlines() if l.strip()]
+        snippet_lines = [s_line.strip() for s_line in snippet.splitlines() if s_line.strip()]
         if snippet_lines:
             scope_ok = any(
-                any(rl in sl or sl in rl for sl in snippet_lines)
-                for rl in removed_lines if rl
+                any(rl in sl or sl in rl for sl in snippet_lines) for rl in removed_lines if rl
             )
 
     applies_cleanly = has_hunk
@@ -70,7 +71,7 @@ def validate_patch(diff: str, snippet: str) -> tuple[bool, bool, bool]:
 async def verify_patch_via_github(
     repo_full_name: str,
     default_branch: str,
-    installation_github_id: Optional[int],
+    installation_github_id: int | None,
     diff: str,
     code_snippet: str,
     file_path: str = "src/index.ts",
@@ -89,13 +90,13 @@ async def verify_patch_via_github(
     8. Return strictly verified result and logs.
     """
     from services.github_service import (
-        fetch_file_content,
         apply_diff_to_content,
-        create_or_update_branch,
-        detect_repo_environment,
-        generate_telex_verification_workflow,
         commit_verification_bundle,
+        create_or_update_branch,
         delete_branch,
+        detect_repo_environment,
+        fetch_file_content,
+        generate_telex_verification_workflow,
         wait_for_telex_verification,
     )
 
@@ -164,9 +165,17 @@ async def verify_patch_via_github(
         )
 
         # 4. Create isolated verification branch on GitHub
-        logger.info("verify_patch_via_github: creating verification branch %s on %s", verify_branch, repo_full_name)
+        logger.info(
+            "verify_patch_via_github: creating verification branch %s on %s",
+            verify_branch,
+            repo_full_name,
+        )
         base_sha = await asyncio.to_thread(
-            create_or_update_branch, repo_full_name, installation_github_id, verify_branch, default_branch
+            create_or_update_branch,
+            repo_full_name,
+            installation_github_id,
+            verify_branch,
+            default_branch,
         )
 
         if not base_sha:
@@ -215,25 +224,30 @@ async def verify_patch_via_github(
         )
 
         # Clean up temporary verification branch on GitHub asynchronously
-        asyncio.create_task(asyncio.to_thread(delete_branch, repo_full_name, installation_github_id, verify_branch))
+        asyncio.create_task(
+            asyncio.to_thread(delete_branch, repo_full_name, installation_github_id, verify_branch)
+        )
 
         # 7. Interpret results strictly
         if ci_result["workflow_found"] and ci_result["completed"]:
             verification_mode = "github_actions"
             typechecks = ci_result["typechecks"]
             tests_pass = ci_result["tests_pass"]
-            all_passed = (ci_result["conclusion"] == "success")
+            all_passed = ci_result["conclusion"] == "success"
 
-            tests_ok = (tests_pass is True) if (requires_tests or env_info.get("has_test")) else (tests_pass in (True, None))
-            typecheck_ok = (typechecks is True) if (requires_typecheck or env_info.get("has_typecheck")) else (typechecks in (True, None))
+            tests_ok = (
+                (tests_pass is True)
+                if (requires_tests or env_info.get("has_test"))
+                else (tests_pass in (True, None))
+            )
+            typecheck_ok = (
+                (typechecks is True)
+                if (requires_typecheck or env_info.get("has_typecheck"))
+                else (typechecks in (True, None))
+            )
 
             is_verified = (
-                all_passed
-                and applies_cleanly
-                and parses
-                and scope_ok
-                and tests_ok
-                and typecheck_ok
+                all_passed and applies_cleanly and parses and scope_ok and tests_ok and typecheck_ok
             )
             return {
                 "applies_cleanly": True,
@@ -275,18 +289,23 @@ verify_patch_in_clone = verify_patch_via_github
 
 
 async def run(payload: dict) -> None:
-    from db.session import AsyncSessionLocal
-    from db.models import CodeUsage, DetectedChange, PackageVersion, Patch, ValidationRun, Repo, Installation
-    from services.patch_providers import get_patch_provider, get_patch_provider_for_user
-    from datetime import datetime, timezone
+
     from config import settings
+    from db.models import (
+        CodeUsage,
+        DetectedChange,
+        PackageVersion,
+        Patch,
+    )
+    from db.session import AsyncSessionLocal
+    from services.patch_providers import get_patch_provider, get_patch_provider_for_user
 
     code_usage_id = uuid.UUID(payload["code_usage_id"])
     # user_id is optional — present when the job was triggered by an authenticated user
     # (i.e. a BYOK-aware workflow). Falls back to platform-hosted provider when absent.
-    job_user_id: Optional[str] = payload.get("user_id")
+    job_user_id: str | None = payload.get("user_id")
     # preferred_provider from payload overrides settings default (allows per-user provider choice)
-    preferred_provider: Optional[str] = payload.get("preferred_provider")
+    preferred_provider: str | None = payload.get("preferred_provider")
 
     # ── Phase 1: read required scalars and repo details ────────────────────────
     async with AsyncSessionLocal() as session:
@@ -310,18 +329,6 @@ async def run(payload: dict) -> None:
                 logger.error("generate_patch: PackageVersion %s not found", dc.package_version_id)
                 return
 
-        repo = await session.get(Repo, cu.repo_id)
-        repo_full_name = repo.full_name if repo else ""
-        repo_default_branch = repo.default_branch if repo else "main"
-        repo_requires_tests = repo.requires_tests if repo else False
-        repo_requires_typecheck = repo.requires_typecheck if repo else False
-
-        installation_github_id: Optional[int] = None
-        if repo and repo.installation_id:
-            inst = await session.get(Installation, repo.installation_id)
-            if inst:
-                installation_github_id = inst.github_installation_id
-
         old_api = dc.symbol_old or ""
         new_api = dc.symbol_new or ""
         defect_description = dc.description or ""
@@ -329,7 +336,6 @@ async def run(payload: dict) -> None:
         file_path = cu.file_path
         context = f"File: {cu.file_path}\nLines {cu.line_start}–{cu.line_end}"
         observed_evidence = ""
-
 
     # ── Phase 2: call provider for Best-of-N candidate diffs (Section 5.2) ────
     # Phase 7: use BYOK-aware factory when a user_id is present in the payload.
@@ -342,7 +348,9 @@ async def run(payload: dict) -> None:
         )
     else:
         provider = get_patch_provider(preferred_provider)
-    provider_name = getattr(provider, "model_name", preferred_provider or settings.llm_provider_default)
+    provider_name = getattr(
+        provider, "model_name", preferred_provider or settings.llm_provider_default
+    )
     model_name = provider.model_name
 
     # Request candidate diffs
@@ -389,7 +397,8 @@ async def run(payload: dict) -> None:
                 apply_ok, _, apply_log = apply_diff_to_content(file_path, code_snippet, cand)
                 if apply_ok:
                     diff_lines = [
-                        line for line in cand.splitlines()
+                        line
+                        for line in cand.splitlines()
                         if line.startswith(("+", "-")) and not line.startswith(("+++", "---"))
                     ]
                     score = len(diff_lines)
@@ -407,7 +416,9 @@ async def run(payload: dict) -> None:
         )
     else:
         diff = "UNABLE_TO_PATCH"
-        logger.warning("generate_patch: all %d candidate diffs failed cheap checks", len(candidates))
+        logger.warning(
+            "generate_patch: all %d candidate diffs failed cheap checks", len(candidates)
+        )
 
     # ── Phase 3: write results in transaction and hand off to validate_patch ──
     async with AsyncSessionLocal() as session:
@@ -418,7 +429,9 @@ async def run(payload: dict) -> None:
         if diff == "UNABLE_TO_PATCH":
             cu.status = "failed"
             await session.commit()
-            logger.warning("generate_patch: provider returned UNABLE_TO_PATCH for usage %s", code_usage_id)
+            logger.warning(
+                "generate_patch: provider returned UNABLE_TO_PATCH for usage %s", code_usage_id
+            )
             return
 
         patch = Patch(
@@ -433,6 +446,7 @@ async def run(payload: dict) -> None:
         await session.flush()
 
         from jobs.queue import enqueue_job
+
         # Propagate user_id and installation_id through the job chain so downstream
         # handlers (validate_patch, open_pr) can apply fairness caps and BYOK.
         validate_payload: dict = {"patch_id": str(patch.id)}
@@ -452,6 +466,3 @@ async def run(payload: dict) -> None:
         patch.id,
         provider_name,
     )
-
-
-

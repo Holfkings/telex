@@ -14,29 +14,29 @@ Executes isolated sandbox verification of candidate patches using dynamic GitHub
 Payload shape:
     { "patch_id": "<uuid>" }
 """
+
 import asyncio
 import logging
 import uuid
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 async def run(payload: dict) -> None:
+    from db.models import CodeUsage, Installation, Patch, Repo, ValidationRun
     from db.session import AsyncSessionLocal
-    from db.models import Patch, CodeUsage, Repo, Installation, ValidationRun
-    from services.github_service import (
-        detect_repo_environment,
-        generate_telex_verification_workflow,
-        create_or_update_branch,
-        commit_verification_bundle,
-        wait_for_telex_verification,
-        delete_branch,
-        fetch_file_content,
-        apply_diff_to_content,
-    )
-    from jobs.queue import enqueue_job
     from jobs.handlers.generate_patch import validate_patch
+    from jobs.queue import enqueue_job
+    from services.github_service import (
+        apply_diff_to_content,
+        commit_verification_bundle,
+        create_or_update_branch,
+        delete_branch,
+        detect_repo_environment,
+        fetch_file_content,
+        generate_telex_verification_workflow,
+        wait_for_telex_verification,
+    )
 
     patch_id_raw = payload.get("patch_id")
     if not patch_id_raw:
@@ -53,7 +53,9 @@ async def run(payload: dict) -> None:
 
         code_usage = await session.get(CodeUsage, patch.code_usage_id)
         if code_usage is None:
-            logger.error("validate_patch: CodeUsage %s not found for patch %s", patch.code_usage_id, patch_id)
+            logger.error(
+                "validate_patch: CodeUsage %s not found for patch %s", patch.code_usage_id, patch_id
+            )
             return
 
         repo = await session.get(Repo, code_usage.repo_id)
@@ -117,15 +119,21 @@ async def run(payload: dict) -> None:
             return
 
         # 3. Micro git apply check on single file
-        branch_name: Optional[str] = None
+        branch_name: str | None = None
         try:
             original_content = await asyncio.to_thread(
-                fetch_file_content, repo_full_name, installation_github_id, file_path, repo_default_branch
+                fetch_file_content,
+                repo_full_name,
+                installation_github_id,
+                file_path,
+                repo_default_branch,
             )
             if not original_content:
                 original_content = code_snippet
 
-            apply_ok, new_content, apply_log = apply_diff_to_content(file_path, original_content, diff)
+            apply_ok, new_content, apply_log = apply_diff_to_content(
+                file_path, original_content, diff
+            )
             if not apply_ok:
                 logger.warning("validate_patch: micro git apply failed: %s", apply_log)
                 vr = ValidationRun(
@@ -161,7 +169,11 @@ async def run(payload: dict) -> None:
 
             # 5. Create isolated verification branch on GitHub
             base_sha = await asyncio.to_thread(
-                create_or_update_branch, repo_full_name, installation_github_id, branch_name, repo_default_branch
+                create_or_update_branch,
+                repo_full_name,
+                installation_github_id,
+                branch_name,
+                repo_default_branch,
             )
             if not base_sha:
                 vr = ValidationRun(
@@ -192,7 +204,9 @@ async def run(payload: dict) -> None:
                 workflow_content=workflow_yaml,
             )
             if not commit_sha:
-                await asyncio.to_thread(delete_branch, repo_full_name, installation_github_id, branch_name)
+                await asyncio.to_thread(
+                    delete_branch, repo_full_name, installation_github_id, branch_name
+                )
                 vr = ValidationRun(
                     patch_id=patch.id,
                     verification_mode="structural_only",
@@ -219,7 +233,9 @@ async def run(payload: dict) -> None:
             )
 
             # 8. Clean up temporary verification branch on GitHub
-            await asyncio.to_thread(delete_branch, repo_full_name, installation_github_id, branch_name)
+            await asyncio.to_thread(
+                delete_branch, repo_full_name, installation_github_id, branch_name
+            )
 
             has_test = bool(env_info.get("has_test"))
             has_typecheck = bool(env_info.get("has_typecheck"))
@@ -230,7 +246,7 @@ async def run(payload: dict) -> None:
             tests_pass = result.get("tests_pass") if has_test else None
             typechecks = result.get("typechecks") if has_typecheck else None
             conclusion = result.get("conclusion")
-            all_passed = (conclusion == "success")
+            all_passed = conclusion == "success"
 
             vr = ValidationRun(
                 patch_id=patch.id,
@@ -270,7 +286,9 @@ async def run(payload: dict) -> None:
                         "code_usage_id": str(code_usage.id),
                     },
                 )
-                logger.info("validate_patch: patch %s verified successfully and enqueued open_pr", patch_id)
+                logger.info(
+                    "validate_patch: patch %s verified successfully and enqueued open_pr", patch_id
+                )
 
             await session.commit()
 
@@ -278,7 +296,9 @@ async def run(payload: dict) -> None:
             logger.exception("validate_patch error for patch %s: %s", patch_id, exc)
             if branch_name:
                 try:
-                    await asyncio.to_thread(delete_branch, repo_full_name, installation_github_id, branch_name)
+                    await asyncio.to_thread(
+                        delete_branch, repo_full_name, installation_github_id, branch_name
+                    )
                 except Exception:
                     pass
             vr = ValidationRun(

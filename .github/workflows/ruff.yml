@@ -1,0 +1,39 @@
+name: Ruff Linting
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/ruff.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/api/**"
+      - ".github/workflows/ruff.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ruff:
+    name: Ruff Code Lint Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Ruff
+        run: pip install "ruff>=0.5.0"
+
+      - name: Check code linting with Ruff
+        run: ruff check .

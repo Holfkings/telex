@@ -8,7 +8,10 @@
   </p>
 
   [![CI](https://github.com/Kesavaraja67/telex/actions/workflows/ci.yml/badge.svg)](https://github.com/Kesavaraja67/telex/actions/workflows/ci.yml)
-  [![Tests](https://img.shields.io/badge/tests-26%2F26-brightgreen?style=flat-square)](https://github.com/Kesavaraja67/telex/actions)
+  [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](LICENSE)
+  [![Coverage](https://img.shields.io/badge/coverage-≥80%25-brightgreen?style=flat-square)](apps/api)
+  [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg?style=flat-square)](https://github.com/psf/black)
+  [![Ruff](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/astral-sh/ruff/main/assets/badge/v2.json&style=flat-square)](https://github.com/astral-sh/ruff)
   [![Phases](https://img.shields.io/badge/build-phases%200–9%20complete-blueviolet?style=flat-square)](ARCHITECTURE.md)
 
   <br><br>
@@ -175,5 +178,9 @@ apps/web/app/dashboard/
 ---
 
 <div align="center">
-  <a href="ARCHITECTURE.md">Architecture</a> · <a href="DEMO.md">Evaluator Guide</a>
+  <a href="ARCHITECTURE.md">Architecture</a> · 
+  <a href="DEMO.md">Evaluator Guide</a> · 
+  <a href="CONTRIBUTING.md">Contributing</a> · 
+  <a href="CODE_OF_CONDUCT.md">Code of Conduct</a> · 
+  <a href="LICENSE">MIT License</a>
 </div>

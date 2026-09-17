@@ -2,30 +2,33 @@
 Async worker loop — Section 7.3.
 Run with: python -m jobs.worker
 """
+
 import asyncio
 import logging
 import os
 import uuid
 from datetime import datetime, timedelta, timezone
+
 from sqlalchemy import func, update
 
-from db.session import AsyncSessionLocal
 from db.models import Job
-from jobs.queue import dequeue_job
+from db.session import AsyncSessionLocal
 from jobs.handlers import (
-    poll_registry,
     extract_changes,
-    scan_repo,
     generate_patch,
-    validate_patch,
     open_pr,
+    poll_registry,
+    scan_repo,
+    validate_patch,
 )
+from jobs.queue import dequeue_job
+from services.logging_utils import install_redacting_formatters
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s — %(message)s",
 )
-from services.logging_utils import install_redacting_formatters
+
 install_redacting_formatters()
 logger = logging.getLogger("telex.worker")
 
@@ -141,13 +144,22 @@ async def worker_loop(worker_id: str) -> None:
                 job = await session.merge(job)
                 if job.attempts >= job.max_attempts:
                     job.status = "failed"
-                    logger.error("Job %s permanently failed after %d attempts: %s", job.id, job.attempts, exc)
+                    logger.error(
+                        "Job %s permanently failed after %d attempts: %s", job.id, job.attempts, exc
+                    )
                 else:
                     job.status = "queued"
                     # Exponential backoff: 30s, 60s, 90s …
                     delay = 30 * job.attempts
                     job.run_after = func.now() + timedelta(seconds=delay)  # type: ignore[assignment]
-                    logger.warning("Job %s failed (attempt %d/%d), retrying in %ds: %s", job.id, job.attempts, job.max_attempts, delay, exc)
+                    logger.warning(
+                        "Job %s failed (attempt %d/%d), retrying in %ds: %s",
+                        job.id,
+                        job.attempts,
+                        job.max_attempts,
+                        delay,
+                        exc,
+                    )
             finally:
                 heartbeat_task.cancel()
                 try:
@@ -160,11 +172,13 @@ async def worker_loop(worker_id: str) -> None:
                     logger.exception("Job %s: could not persist final state", job.id)
                     await session.rollback()
 
+
 async def schedule_package_polling() -> None:
     """Periodically enqueue poll_registry for all packages tracked by active repos."""
-    from db.models import Package, RepoPackage, Repo
-    from jobs.queue import enqueue_job
     from sqlalchemy import select
+
+    from db.models import Package, Repo, RepoPackage
+    from jobs.queue import enqueue_job
 
     try:
         async with AsyncSessionLocal() as session:
@@ -196,6 +210,7 @@ def start_scheduler():
     """Start APScheduler for periodic registry polling."""
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
         scheduler = AsyncIOScheduler()
         scheduler.add_job(
             schedule_package_polling,
@@ -224,4 +239,3 @@ if __name__ == "__main__":
         if scheduler:
             scheduler.shutdown()
         logger.info("Worker pool shutting down")
-

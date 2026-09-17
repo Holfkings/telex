@@ -7,6 +7,7 @@ curated real-world breaking changes from major npm and PyPI package upgrades.
 Usage:
     python apps/api/scripts/run_benchmark.py
 """
+
 import asyncio
 import difflib
 import os
@@ -56,11 +57,20 @@ async def run_benchmark():
 
     import argparse
     import asyncio
+
     parser = argparse.ArgumentParser(description="Run Telex breaking change benchmarks")
-    parser.add_argument("--live", action="store_true", help="Evaluate live LLM patch provider instead of ground truth")
+    parser.add_argument(
+        "--live",
+        action="store_true",
+        help="Evaluate live LLM patch provider instead of ground truth",
+    )
     args, _ = parser.parse_known_args()
 
-    mode_str = "Live LLM Provider Generation" if args.live else "Ground-Truth Verification / Self-Check Mode"
+    mode_str = (
+        "Live LLM Provider Generation"
+        if args.live
+        else "Ground-Truth Verification / Self-Check Mode"
+    )
 
     print("=" * 78)
     print("TELEX AUTONOMOUS REPAIR QUALITY BENCHMARK (PHASE 5)")
@@ -88,13 +98,15 @@ async def run_benchmark():
             ext = ".py"
 
         if not before_file.exists() or not after_file.exists():
-            results.append({
-                "name": name,
-                "ecosystem": ecosystem,
-                "status": "SKIP",
-                "reason": "Missing before or after fixture",
-                "diff_size": 0,
-            })
+            results.append(
+                {
+                    "name": name,
+                    "ecosystem": ecosystem,
+                    "status": "SKIP",
+                    "reason": "Missing before or after fixture",
+                    "diff_size": 0,
+                }
+            )
             continue
 
         before_code = before_file.read_text(encoding="utf-8")
@@ -105,14 +117,17 @@ async def run_benchmark():
         if args.live:
             try:
                 from services.patch_providers import get_patch_provider
+
                 provider = get_patch_provider()
-                patch_diff = asyncio.run(provider.generate_patch(
-                    old_api=name,
-                    new_api=name,
-                    code_snippet=before_code,
-                    context=f"Benchmark: {name}",
-                    defect_description=change_desc,
-                ))
+                patch_diff = asyncio.run(
+                    provider.generate_patch(
+                        old_api=name,
+                        new_api=name,
+                        code_snippet=before_code,
+                        context=f"Benchmark: {name}",
+                        defect_description=change_desc,
+                    )
+                )
             except Exception as exc:
                 print(f"[{name}] Live provider failed ({exc}), falling back to ground truth.")
                 patch_diff = generate_unified_diff(rel_path, before_code, expected_code)
@@ -123,40 +138,51 @@ async def run_benchmark():
         applies_cleanly, parses, scope_ok = validate_patch(patch_diff, before_code)
 
         # 2. Local micro git apply check
-        apply_ok, patched_content, apply_log = apply_diff_to_content(rel_path, before_code, patch_diff)
+        apply_ok, patched_content, apply_log = apply_diff_to_content(
+            rel_path, before_code, patch_diff
+        )
 
         # 3. Exact semantic match check
         norm_patched = normalize_code(patched_content)
         norm_expected = normalize_code(expected_code)
-        matches_expected = (norm_patched == norm_expected)
+        matches_expected = norm_patched == norm_expected
 
-        passed = (applies_cleanly and parses and scope_ok and apply_ok and matches_expected)
+        passed = applies_cleanly and parses and scope_ok and apply_ok and matches_expected
 
-        diff_line_count = len([
-            l for l in patch_diff.splitlines()
-            if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))
-        ])
+        diff_line_count = len(
+            [
+                l
+                for l in patch_diff.splitlines()
+                if l.startswith(("+", "-")) and not l.startswith(("+++", "---"))
+            ]
+        )
 
-        results.append({
-            "name": name,
-            "ecosystem": ecosystem,
-            "status": "PASS" if passed else "FAIL",
-            "diff_size": diff_line_count,
-            "applies": apply_ok,
-            "parses": parses,
-            "scope_ok": scope_ok,
-            "matches": matches_expected,
-        })
+        results.append(
+            {
+                "name": name,
+                "ecosystem": ecosystem,
+                "status": "PASS" if passed else "FAIL",
+                "diff_size": diff_line_count,
+                "applies": apply_ok,
+                "parses": parses,
+                "scope_ok": scope_ok,
+                "matches": matches_expected,
+            }
+        )
 
     # Print Report Table
-    print(f"{'Fixture Name':<34} | {'Eco':<5} | {'Diff':<4} | {'Apply':<5} | {'Parse':<5} | {'Status'}")
+    print(
+        f"{'Fixture Name':<34} | {'Eco':<5} | {'Diff':<4} | {'Apply':<5} | {'Parse':<5} | {'Status'}"
+    )
     print("-" * 78)
     for r in results:
         status_color = "PASS" if r["status"] == "PASS" else "FAIL"
         apply_mark = "OK" if r.get("applies") else "FAIL"
         parse_mark = "OK" if r.get("parses") else "FAIL"
         diff_lines = f"{r.get('diff_size', 0)}L"
-        print(f"{r['name']:<34} | {r['ecosystem']:<5} | {diff_lines:<4} | {apply_mark:<5} | {parse_mark:<5} | [{status_color}]")
+        print(
+            f"{r['name']:<34} | {r['ecosystem']:<5} | {diff_lines:<4} | {apply_mark:<5} | {parse_mark:<5} | [{status_color}]"
+        )
 
     print("-" * 78)
     total = len(results)

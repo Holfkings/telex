@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getApiUrl } from "@/lib/api";
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
   const code = searchParams.get("code");
   const state = searchParams.get("state") || "";
 
-  const apiUrl = process.env.NEXT_PUBLIC_API_URL || "https://telex-api.onrender.com";
+  const apiUrl = getApiUrl();
 
   if (!code) {
     return NextResponse.redirect(new URL("/dashboard", request.url));

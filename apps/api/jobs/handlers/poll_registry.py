@@ -4,19 +4,20 @@ poll_registry handler — checks npm for new versions of tracked packages.
 Payload shape:
     { "package_id": "<uuid>", "package_name": "openai", "ecosystem": "npm" }
 """
+
 import logging
 import uuid
-from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
 
 async def run(payload: dict) -> None:
-    from db.session import AsyncSessionLocal
-    from db.models import Package, PackageVersion
-    from services.registry_watcher import fetch_latest_version
-    from jobs.queue import enqueue_job
     from sqlalchemy import select
+
+    from db.models import PackageVersion
+    from db.session import AsyncSessionLocal
+    from jobs.queue import enqueue_job
+    from services.registry_watcher import fetch_latest_version
 
     package_id = uuid.UUID(payload["package_id"])
     package_name = payload["package_name"]

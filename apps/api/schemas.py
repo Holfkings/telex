@@ -1,33 +1,35 @@
 """
 Pydantic request/response schemas — Section 9 API contract.
 """
+
 from __future__ import annotations
 
 import uuid
 from datetime import datetime
-from typing import Optional
+
 from pydantic import BaseModel
 
-
 # ── Auth ──────────────────────────────────────────────────────────────────────
+
 
 class UserOut(BaseModel):
     id: uuid.UUID
     github_login: str
-    email: Optional[str]
-    avatar_url: Optional[str]
+    email: str | None
+    avatar_url: str | None
 
     model_config = {"from_attributes": True}
 
 
 # ── Repos ─────────────────────────────────────────────────────────────────────
 
+
 class CommitInfo(BaseModel):
     hash: str
     short_hash: str
     message: str
     author: str
-    email: Optional[str] = None
+    email: str | None = None
     date: str
     relative_time: str
 
@@ -35,9 +37,9 @@ class CommitInfo(BaseModel):
 class RepoOut(BaseModel):
     id: str
     full_name: str
-    name: Optional[str] = None
-    owner: Optional[str] = None
-    description: Optional[str] = None
+    name: str | None = None
+    owner: str | None = None
+    description: str | None = None
     default_branch: str = "main"
     is_active: bool = True
     requires_tests: bool = False
@@ -47,16 +49,16 @@ class RepoOut(BaseModel):
     languages: list[str] = []
     patch_count: int = 0
     status: str = "healthy"
-    last_commit: Optional[CommitInfo] = None
+    last_commit: CommitInfo | None = None
     dependencies: list[str] = []
 
     model_config = {"from_attributes": True}
 
 
 class RepoUpdateIn(BaseModel):
-    requires_tests: Optional[bool] = None
-    requires_typecheck: Optional[bool] = None
-    is_active: Optional[bool] = None
+    requires_tests: bool | None = None
+    requires_typecheck: bool | None = None
+    is_active: bool | None = None
 
 
 class RepoDetailOut(RepoOut):
@@ -83,21 +85,22 @@ class RepoToggleIn(BaseModel):
 
 # ── Patches ───────────────────────────────────────────────────────────────────
 
+
 class PatchOut(BaseModel):
     id: str
     package: str
     old_version: str
     new_version: str
     status: str
-    pr_url: Optional[str] = None
+    pr_url: str | None = None
     usages_patched: int = 1
     opened_at: datetime
-    diff: Optional[str] = None
-    verification_mode: Optional[str] = None
-    tests_passed: Optional[bool] = None
-    typecheck_passed: Optional[bool] = None
-    change_type: Optional[str] = None
-    change_description: Optional[str] = None
+    diff: str | None = None
+    verification_mode: str | None = None
+    tests_passed: bool | None = None
+    typecheck_passed: bool | None = None
+    change_type: str | None = None
+    change_description: str | None = None
 
 
 class RepoPatchesOut(BaseModel):
@@ -107,10 +110,11 @@ class RepoPatchesOut(BaseModel):
 
 # ── Stats ─────────────────────────────────────────────────────────────────────
 
+
 class DetectedChangeSummary(BaseModel):
     id: str
     symbol_old: str
-    symbol_new: Optional[str] = None
+    symbol_new: str | None = None
     change_type: str
     description: str
     created_at: datetime
@@ -126,18 +130,18 @@ class StatsOut(BaseModel):
 
 # ── Webhooks ──────────────────────────────────────────────────────────────────
 
+
 class GitHubInstallationEvent(BaseModel):
     action: str
     installation: dict
-    repositories: Optional[list[dict]] = None
+    repositories: list[dict] | None = None
 
 
 # ── Rescan ────────────────────────────────────────────────────────────────────
+
 
 class RescanIn(BaseModel):
     package_name: str
     old_version: str
     new_version: str
-    changelog: Optional[str] = None
-
-
+    changelog: str | None = None

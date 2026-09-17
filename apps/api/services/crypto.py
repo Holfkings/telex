@@ -19,6 +19,7 @@ Security posture:
     the automated test suite which injects a generated key via env vars).
   - This prevents accidental exposure if the app is deployed without the key.
 """
+
 import logging
 import os
 
@@ -57,7 +58,7 @@ def _get_master_key() -> bytes:
         raise RuntimeError(
             f"Startup blocked: {_ENCRYPTION_KEY_ENV} is not set. "
             "Generate one with: "
-            "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         )
 
     try:
@@ -69,7 +70,7 @@ def _get_master_key() -> bytes:
         raise RuntimeError(
             f"{_ENCRYPTION_KEY_ENV} is not a valid Fernet key: {exc}. "
             "Generate one with: "
-            "python -c \"from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())\""
+            'python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"'
         ) from exc
 
 
@@ -95,5 +96,7 @@ def decrypt_key(ciphertext: str) -> str:
     try:
         return Fernet(master_key).decrypt(ciphertext.encode()).decode()
     except InvalidToken:
-        logger.error("crypto.decrypt_key: InvalidToken — key may have rotated or ciphertext is corrupt")
+        logger.error(
+            "crypto.decrypt_key: InvalidToken — key may have rotated or ciphertext is corrupt"
+        )
         raise

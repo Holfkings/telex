@@ -3,15 +3,17 @@ Repository Service — dynamically fetches LIVE real-time repository data,
 recent git commits, and Gemini 2.5 Flash architectural insights from GitHub API
 for both personal repositories and industry benchmark repositories.
 """
-import os
-import json
+
 import asyncio
+import json
 import logging
-import urllib.request
+import os
 import subprocess
-from datetime import datetime, timezone
 import time
-from typing import Optional, List, Any
+import urllib.request
+from datetime import datetime, timezone
+from typing import Any
+
 from config import get_settings
 from services.patch_providers.gemini import GeminiProvider
 
@@ -26,7 +28,8 @@ _CACHE: dict[str, Any] = {
     "commits_by_repo": {},
 }
 
-def _parse_github_datetime(iso_str: Optional[str]) -> str:
+
+def _parse_github_datetime(iso_str: str | None) -> str:
     """Formats GitHub ISO datetime into human-friendly relative time."""
     if not iso_str:
         return "recently"
@@ -50,6 +53,7 @@ def _parse_github_datetime(iso_str: Optional[str]) -> str:
     except Exception:
         return iso_str[:10]
 
+
 def fetch_live_github_commits(repo_full_name: str, limit: int = 5) -> list[dict]:
     """Fetch live recent commits for a repository from GitHub API."""
     cache_key = f"{repo_full_name}-{limit}"
@@ -70,19 +74,24 @@ def fetch_live_github_commits(repo_full_name: str, limit: int = 5) -> list[dict]
                 sha = c.get("sha", "")
                 date_str = author_obj.get("date")
                 rel_time = _parse_github_datetime(date_str)
-                commits.append({
-                    "hash": sha,
-                    "short_hash": sha[:7] if sha else "HEAD",
-                    "author": committer_obj.get("login") or author_obj.get("name") or "Developer",
-                    "email": author_obj.get("email") or "dev@github.com",
-                    "relative_time": rel_time,
-                    "date": rel_time,
-                    "message": commit_obj.get("message", "Update codebase").split("\n")[0],
-                })
+                commits.append(
+                    {
+                        "hash": sha,
+                        "short_hash": sha[:7] if sha else "HEAD",
+                        "author": committer_obj.get("login")
+                        or author_obj.get("name")
+                        or "Developer",
+                        "email": author_obj.get("email") or "dev@github.com",
+                        "relative_time": rel_time,
+                        "date": rel_time,
+                        "message": commit_obj.get("message", "Update codebase").split("\n")[0],
+                    }
+                )
             _CACHE["commits_by_repo"][cache_key] = {"data": commits, "time": time.time()}
             return commits
     except Exception:
         return []
+
 
 def get_local_git_commits(repo_path: str, limit: int = 5) -> list[dict]:
     """Fallback local git parser."""
@@ -90,24 +99,28 @@ def get_local_git_commits(repo_path: str, limit: int = 5) -> list[dict]:
         return []
     try:
         cmd = ["git", "log", f"-n{limit}", "--pretty=format:%H|%an|%ae|%ad|%s", "--date=relative"]
-        res = subprocess.run(cmd, cwd=repo_path, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        res = subprocess.run(cmd, cwd=repo_path, capture_output=True, text=True)
         commits = []
         for line in res.stdout.strip().split("\n"):
-            if not line: continue
+            if not line:
+                continue
             p = line.split("|")
             if len(p) >= 5:
-                commits.append({
-                    "hash": p[0],
-                    "short_hash": p[0][:7],
-                    "author": p[1],
-                    "email": p[2],
-                    "relative_time": p[3],
-                    "date": p[3],
-                    "message": "|".join(p[4:]),
-                })
+                commits.append(
+                    {
+                        "hash": p[0],
+                        "short_hash": p[0][:7],
+                        "author": p[1],
+                        "email": p[2],
+                        "relative_time": p[3],
+                        "date": p[3],
+                        "message": "|".join(p[4:]),
+                    }
+                )
         return commits
     except Exception:
         return []
+
 
 BENCHMARK_REPOS: list[dict[str, Any]] = [
     {
@@ -177,7 +190,9 @@ BENCHMARK_REPOS: list[dict[str, Any]] = [
 ]
 
 
-def fetch_repo_metadata_from_github(repo_full_name: str, default_branch: str = "main") -> dict[str, Any]:
+def fetch_repo_metadata_from_github(
+    repo_full_name: str, default_branch: str = "main"
+) -> dict[str, Any]:
     """Dynamically fetches real repository description, languages, and dependencies from GitHub API."""
     metadata: dict[str, Any] = {
         "description": "Connected repository monitored by Telex autonomous telemetry engine.",
@@ -226,7 +241,11 @@ def fetch_repo_metadata_from_github(repo_full_name: str, default_branch: str = "
             req_url = f"https://raw.githubusercontent.com/{repo_full_name}/{branch_to_use}/requirements.txt"
             req = urllib.request.Request(req_url, headers={"User-Agent": "Telex-Autonomous-Agent"})
             with urllib.request.urlopen(req, timeout=4) as resp:
-                lines = [l.strip().split("==")[0].split(">=")[0] for l in resp.read().decode().splitlines() if l.strip() and not l.startswith("#")]
+                lines = [
+                    line.strip().split("==")[0].split(">=")[0]
+                    for line in resp.read().decode().splitlines()
+                    if line.strip() and not line.startswith("#")
+                ]
                 if lines:
                     metadata["dependencies"] = lines[:6]
         except Exception:
@@ -235,11 +254,138 @@ def fetch_repo_metadata_from_github(repo_full_name: str, default_branch: str = "
     return metadata
 
 
-async def get_core_repositories_async() -> list[dict]:
-    """Dynamically loads connected repositories from the database and hydrates live GitHub commit telemetry."""
+_LAST_SYNC_TIME: float = 0.0
+
+
+async def sync_github_app_repositories_async() -> None:
+    """
+    Directly queries GitHub App installations and syncs accessible repositories
+    into the database so newly connected repositories are immediately available
+    even if webhook delivery to localhost is unavailable.
+    """
+    global _LAST_SYNC_TIME
+    settings = get_settings()
+    if not settings.github_app_id or not settings.github_app_private_key:
+        return
+
+    import httpx
+    from github import GithubIntegration
+    from sqlalchemy import select
+
+    from db.models import Installation, Repo
     from db.session import AsyncSessionLocal
-    from db.models import Repo, PullRequest
-    from sqlalchemy import select, func
+
+    try:
+        private_key = settings.github_app_private_key.replace("\\n", "\n").strip("\"'")
+        integration = GithubIntegration(int(settings.github_app_id), private_key)
+        installations = await asyncio.to_thread(lambda: list(integration.get_installations()))
+
+        async with AsyncSessionLocal() as session:
+            for inst in installations:
+                account_login = inst.raw_data.get("account", {}).get("login", "unknown")
+                token = await asyncio.to_thread(
+                    lambda i_id=inst.id: integration.get_access_token(i_id).token
+                )
+
+                res = await session.execute(
+                    select(Installation).where(Installation.github_installation_id == inst.id)
+                )
+                db_inst = res.scalar_one_or_none()
+                if not db_inst:
+                    db_inst = Installation(
+                        github_installation_id=inst.id,
+                        account_login=account_login,
+                        account_type=inst.raw_data.get("account", {}).get("type", "User"),
+                    )
+                    session.add(db_inst)
+                    await session.flush()
+
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    gh_repos = []
+                    page = 1
+                    while True:
+                        resp = await client.get(
+                            "https://api.github.com/installation/repositories",
+                            params={"per_page": 100, "page": page},
+                            headers={
+                                "Authorization": f"Bearer {token}",
+                                "Accept": "application/vnd.github+json",
+                                "User-Agent": "Telex-Autonomous-Agent",
+                            },
+                        )
+                        if resp.status_code != 200:
+                            # If the first page succeeded, we still process gathered repos
+                            break
+                        data = resp.json()
+                        page_repos = data.get("repositories", [])
+                        gh_repos.extend(page_repos)
+                        total_count = data.get("total_count", len(gh_repos))
+                        # Stop fetching when all repositories are retrieved or no more returned
+                        if not page_repos or len(gh_repos) >= total_count:
+                            break
+                        page += 1
+
+                    if gh_repos:
+                        active_gh_ids = set()
+                        for gr in gh_repos:
+                            active_gh_ids.add(gr["id"])
+                            r_res = await session.execute(
+                                select(Repo).where(Repo.github_repo_id == gr["id"])
+                            )
+                            db_repo = r_res.scalar_one_or_none()
+                            if db_repo:
+                                db_repo.installation_id = db_inst.id
+                                db_repo.is_active = True
+                                db_repo.full_name = gr["full_name"]
+                                db_repo.default_branch = gr.get("default_branch", "main")
+                            else:
+                                db_repo = Repo(
+                                    installation_id=db_inst.id,
+                                    github_repo_id=gr["id"],
+                                    full_name=gr["full_name"],
+                                    default_branch=gr.get("default_branch", "main"),
+                                    is_active=True,
+                                )
+                                session.add(db_repo)
+
+                        # Deactivate repos no longer returned for this installation
+                        all_inst_repos = (
+                            (
+                                await session.execute(
+                                    select(Repo).where(Repo.installation_id == db_inst.id)
+                                )
+                            )
+                            .scalars()
+                            .all()
+                        )
+                        for r in all_inst_repos:
+                            if r.github_repo_id not in active_gh_ids:
+                                r.is_active = False
+
+                        await session.commit()
+                        logger.info(
+                            "Successfully synced %d repos for installation %s",
+                            len(gh_repos),
+                            inst.id,
+                        )
+
+        _LAST_SYNC_TIME = time.time()
+    except Exception as exc:
+        logger.warning("sync_github_app_repositories_async error: %s", exc)
+
+
+async def get_core_repositories_async(
+    force_sync: bool = False, include_benchmarks: bool = False
+) -> list[dict]:
+    """Dynamically loads connected repositories from the database and hydrates live GitHub commit telemetry."""
+    global _LAST_SYNC_TIME
+    if force_sync or (time.time() - _LAST_SYNC_TIME) > 30:
+        await sync_github_app_repositories_async()
+
+    from sqlalchemy import func, select
+
+    from db.models import PullRequest, Repo
+    from db.session import AsyncSessionLocal
 
     personal_repos: list[dict] = []
     try:
@@ -267,29 +413,36 @@ async def get_core_repositories_async() -> list[dict]:
                     )
                     pr_count: int = pr_res.scalar_one() or 0
 
-                    personal_repos.append({
-                        "id": str(r.id),
-                        "full_name": r.full_name,
-                        "name": name,
-                        "owner": owner,
-                        "description": meta.get("description") or f"Autonomous codebase tracked by Telex Engine ({', '.join(meta['languages'])}).",
-                        "default_branch": r.default_branch or "main",
-                        "is_active": r.is_active,
-                        "requires_tests": bool(r.requires_tests),
-                        "requires_typecheck": bool(r.requires_typecheck),
-                        "created_at": r.created_at,
-                        "github_url": f"https://github.com/{r.full_name}",
-                        "languages": meta.get("languages") or ["TypeScript"],
-                        "patch_count": pr_count,
-                        "status": "healthy",
-                        "category": "personal",
-                        "commits": commits,
-                        "last_commit": commits[0] if commits else None,
-                        "dependencies": meta.get("dependencies") or ["typescript"],
-                    })
+                    personal_repos.append(
+                        {
+                            "id": str(r.id),
+                            "full_name": r.full_name,
+                            "name": name,
+                            "owner": owner,
+                            "description": meta.get("description")
+                            or f"Autonomous codebase tracked by Telex Engine ({', '.join(meta['languages'])}).",
+                            "default_branch": r.default_branch or "main",
+                            "is_active": r.is_active,
+                            "requires_tests": r.requires_tests,
+                            "requires_typecheck": r.requires_typecheck,
+                            "created_at": r.created_at,
+                            "github_url": f"https://github.com/{r.full_name}",
+                            "languages": meta.get("languages") or ["TypeScript"],
+                            "patch_count": pr_count,
+                            "status": "healthy",
+                            "category": "personal",
+                            "commits": commits,
+                            "last_commit": commits[0] if commits else None,
+                            "dependencies": meta.get("dependencies") or ["typescript"],
+                        }
+                    )
     except Exception as exc:
         logger.exception("get_core_repositories_async failed to load repositories: %s", exc)
         personal_repos = []
+
+    # Only return benchmarks if explicitly requested
+    if not include_benchmarks:
+        return personal_repos
 
     # Hydrate benchmarks with latest commits
     hydrated_benchmarks = []
@@ -305,8 +458,17 @@ async def get_core_repositories_async() -> list[dict]:
 
 async def explain_repo_with_gemini(repo_id: str) -> dict:
     """Invokes Gemini 2.5 Flash to generate live deep architectural and commit intelligence for a repo."""
-    repos = await get_core_repositories_async()
-    target_repo = next((r for r in repos if r["id"] == repo_id or r["full_name"].lower() == repo_id.lower() or r["name"].lower() == repo_id.lower()), None)
+    repos = await get_core_repositories_async(include_benchmarks=True)
+    target_repo = next(
+        (
+            r
+            for r in repos
+            if r["id"] == repo_id
+            or r["full_name"].lower() == repo_id.lower()
+            or r["name"].lower() == repo_id.lower()
+        ),
+        None,
+    )
     if not target_repo:
         raise KeyError(f"Repository '{repo_id}' not found")
 

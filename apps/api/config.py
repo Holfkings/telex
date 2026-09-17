@@ -1,5 +1,7 @@
-from pydantic_settings import BaseSettings, SettingsConfigDict
+import os
 from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -38,9 +40,10 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://localhost:3001",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:3001",
         "https://telex-pi.vercel.app",
-        "https://telex-agent-dev.vercel.app",
-        "https://aura-drops-gold.vercel.app",
+        "https://aura-drops.vercel.app",
     ]
     demo_key: str = "telex_demo_secret_2026"
 
@@ -55,8 +58,6 @@ def get_settings() -> Settings:
 
 settings = get_settings()
 
-
-import os
 
 # P1-3: Fail loudly at startup if running in production without real secrets.
 # Uses normalized predicate (checks RENDER or case-insensitive ENVIRONMENT=production).
@@ -75,4 +76,3 @@ if _is_production:
             f"Production startup blocked — the following secrets are missing or have default values: "
             f"{', '.join(_missing)}. Set them as environment variables in Render."
         )
-

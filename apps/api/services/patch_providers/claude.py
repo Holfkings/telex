@@ -2,7 +2,7 @@ import logging
 
 from .base import FailureClassification, PatchProvider
 from .gemini import extract_diff, parse_classification_response
-from .prompts import PATCH_PROMPT_TEMPLATE, CLASSIFY_FAILURE_PROMPT_TEMPLATE
+from .prompts import CLASSIFY_FAILURE_PROMPT_TEMPLATE, PATCH_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
@@ -48,7 +48,8 @@ class ClaudeProvider(PatchProvider):
             new_api=new_api,
             code_snippet=code_snippet,
             context=context,
-            defect_description=defect_description or "Runtime defect detected — see observed evidence below.",
+            defect_description=defect_description
+            or "Runtime defect detected — see observed evidence below.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
         # Transient provider/transport errors propagate so worker can retry
@@ -127,5 +128,3 @@ class ClaudeProvider(PatchProvider):
                 "recommended_action": "Treat as transient and retry once; escalate if it recurs.",
             }
         return parse_classification_response(raw)
-
-

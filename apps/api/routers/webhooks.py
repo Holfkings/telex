@@ -3,14 +3,16 @@ GitHub webhook receiver — Section 7.7.
 
 Verifies HMAC-SHA256 signatures before processing any payload.
 """
-from datetime import datetime, timezone
+
 import logging
-from fastapi import APIRouter, Request, HTTPException, Header
-from typing import Optional
-from db.session import AsyncSessionLocal
-from db.models import Installation, Repo, PullRequest
-from services.github_service import verify_webhook_signature
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Header, HTTPException, Request
 from sqlalchemy import select
+
+from db.models import Installation, PullRequest, Repo
+from db.session import AsyncSessionLocal
+from services.github_service import verify_webhook_signature
 
 router = APIRouter(prefix="/webhooks", tags=["webhooks"])
 logger = logging.getLogger(__name__)
@@ -19,8 +21,8 @@ logger = logging.getLogger(__name__)
 @router.post("/github", status_code=200)
 async def github_webhook(
     request: Request,
-    x_hub_signature_256: Optional[str] = Header(None),
-    x_github_event: Optional[str] = Header(None),
+    x_hub_signature_256: str | None = Header(None),
+    x_github_event: str | None = Header(None),
 ):
     """
     Receive GitHub App webhook events.
@@ -67,9 +69,7 @@ async def _handle_installation_created(payload: dict) -> None:
     async with AsyncSessionLocal() as session:
         # Upsert installation
         existing = await session.execute(
-            select(Installation).where(
-                Installation.github_installation_id == inst_data["id"]
-            )
+            select(Installation).where(Installation.github_installation_id == inst_data["id"])
         )
         inst = existing.scalar_one_or_none()
         if inst is None:
@@ -106,9 +106,7 @@ async def _handle_installation_repositories(payload: dict) -> None:
 
     async with AsyncSessionLocal() as session:
         existing = await session.execute(
-            select(Installation).where(
-                Installation.github_installation_id == inst_data["id"]
-            )
+            select(Installation).where(Installation.github_installation_id == inst_data["id"])
         )
         inst = existing.scalar_one_or_none()
         if inst is None:
@@ -153,15 +151,11 @@ async def _handle_installation_deleted(payload: dict) -> None:
     inst_data = payload.get("installation", {})
     async with AsyncSessionLocal() as session:
         inst = await session.execute(
-            select(Installation).where(
-                Installation.github_installation_id == inst_data["id"]
-            )
+            select(Installation).where(Installation.github_installation_id == inst_data["id"])
         )
         inst = inst.scalar_one_or_none()
         if inst:
-            repos = await session.execute(
-                select(Repo).where(Repo.installation_id == inst.id)
-            )
+            repos = await session.execute(select(Repo).where(Repo.installation_id == inst.id))
             for repo in repos.scalars():
                 repo.is_active = False
             await session.commit()
@@ -181,9 +175,7 @@ async def _handle_pull_request(payload: dict) -> None:
         return
 
     async with AsyncSessionLocal() as session:
-        repo_res = await session.execute(
-            select(Repo).where(Repo.github_repo_id == github_repo_id)
-        )
+        repo_res = await session.execute(select(Repo).where(Repo.github_repo_id == github_repo_id))
         repo = repo_res.scalar_one_or_none()
         if not repo:
             return
@@ -231,5 +223,10 @@ async def _handle_pull_request(payload: dict) -> None:
                 pr.closed_at = datetime.now(timezone.utc)
 
             await session.commit()
-            logger.info("PullRequest %s (#%s) updated: status=%s, merged=%s", pr.id, pr_number, pr.status, pr.merged)
-
+            logger.info(
+                "PullRequest %s (#%s) updated: status=%s, merged=%s",
+                pr.id,
+                pr_number,
+                pr.status,
+                pr.merged,
+            )

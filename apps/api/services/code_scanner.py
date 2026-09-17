@@ -6,6 +6,7 @@ Two patterns are supported:
   1. Identifier calls:       createCompletion(...)
   2. Member-expression calls: client.createCompletion(...)
 """
+
 import logging
 from pathlib import Path
 
@@ -19,7 +20,10 @@ LANGUAGE_CONFIG = {
         "call_node_type": "call_expression",
         "queries": [
             ("(call_expression function: (identifier) @fn)", "fn"),
-            ("(call_expression function: (member_expression property: (property_identifier) @prop))", "prop"),
+            (
+                "(call_expression function: (member_expression property: (property_identifier) @prop))",
+                "prop",
+            ),
         ],
     },
     "tsx": {
@@ -28,7 +32,10 @@ LANGUAGE_CONFIG = {
         "call_node_type": "call_expression",
         "queries": [
             ("(call_expression function: (identifier) @fn)", "fn"),
-            ("(call_expression function: (member_expression property: (property_identifier) @prop))", "prop"),
+            (
+                "(call_expression function: (member_expression property: (property_identifier) @prop))",
+                "prop",
+            ),
         ],
     },
     "javascript": {
@@ -37,7 +44,10 @@ LANGUAGE_CONFIG = {
         "call_node_type": "call_expression",
         "queries": [
             ("(call_expression function: (identifier) @fn)", "fn"),
-            ("(call_expression function: (member_expression property: (property_identifier) @prop))", "prop"),
+            (
+                "(call_expression function: (member_expression property: (property_identifier) @prop))",
+                "prop",
+            ),
         ],
     },
     "python": {
@@ -68,9 +78,7 @@ def find_usages(file_path: str, source: bytes, symbol_name: str) -> list[dict]:
     try:
         import tree_sitter_languages as tsl
     except ImportError:
-        logger.error(
-            "tree_sitter_languages not installed — run: pip install tree-sitter-languages"
-        )
+        logger.error("tree_sitter_languages not installed — run: pip install tree-sitter-languages")
         return []
 
     # Detect language from extension

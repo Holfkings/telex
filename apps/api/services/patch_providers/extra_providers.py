@@ -8,16 +8,18 @@ Default model constants are at the top of each class — change to swap.
 Required packages (install when enabling BYOK for a provider):
   cohere>=5.0.0, openai>=1.0.0 (xAI/DeepSeek/Together use OpenAI client pointed at alt base_url)
 """
+
 import logging
 
 from .base import FailureClassification, PatchProvider
 from .gemini import extract_diff, parse_classification_response
-from .prompts import PATCH_PROMPT_TEMPLATE, CLASSIFY_FAILURE_PROMPT_TEMPLATE
+from .prompts import CLASSIFY_FAILURE_PROMPT_TEMPLATE, PATCH_PROMPT_TEMPLATE
 
 logger = logging.getLogger(__name__)
 
 
 # ── Cohere ───────────────────────────────────────────────────────────────────
+
 
 class CohereProvider(PatchProvider):
     """Patch provider backed by Cohere Command R+."""
@@ -38,11 +40,14 @@ class CohereProvider(PatchProvider):
     def model_name(self) -> str:
         return self._model_name
 
-    async def generate_patch(self, old_api, new_api, code_snippet, context,
-                              defect_description="", observed_evidence="") -> str:
+    async def generate_patch(
+        self, old_api, new_api, code_snippet, context, defect_description="", observed_evidence=""
+    ) -> str:
         prompt = PATCH_PROMPT_TEMPLATE.format(
-            old_api=old_api or "(not applicable)", new_api=new_api or "(not applicable)",
-            code_snippet=code_snippet, context=context,
+            old_api=old_api or "(not applicable)",
+            new_api=new_api or "(not applicable)",
+            code_snippet=code_snippet,
+            context=context,
             defect_description=defect_description or "Runtime defect detected.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
@@ -57,14 +62,27 @@ class CohereProvider(PatchProvider):
             logger.error("CohereProvider.generate_patch failed: %s", exc)
             raise
 
-    async def generate_patch_candidates(self, old_api, new_api, code_snippet, context,
-                                         defect_description="", observed_evidence="", n=3) -> list[str]:
-        return [await self.generate_patch(old_api, new_api, code_snippet, context,
-                                          defect_description, observed_evidence) for _ in range(n)]
+    async def generate_patch_candidates(
+        self,
+        old_api,
+        new_api,
+        code_snippet,
+        context,
+        defect_description="",
+        observed_evidence="",
+        n=3,
+    ) -> list[str]:
+        return [
+            await self.generate_patch(
+                old_api, new_api, code_snippet, context, defect_description, observed_evidence
+            )
+            for _ in range(n)
+        ]
 
     async def classify_failure(self, failure_type, error_context) -> FailureClassification:
         prompt = CLASSIFY_FAILURE_PROMPT_TEMPLATE.format(
-            failure_type=failure_type, error_context=error_context)
+            failure_type=failure_type, error_context=error_context
+        )
         try:
             response = await self.client.chat(
                 model=self._model_name,
@@ -78,6 +96,7 @@ class CohereProvider(PatchProvider):
 
 
 # ── xAI (Grok) ────────────────────────────────────────────────────────────
+
 
 class XAIProvider(PatchProvider):
     """Patch provider backed by xAI Grok via OpenAI-compatible API."""
@@ -99,11 +118,14 @@ class XAIProvider(PatchProvider):
     def model_name(self) -> str:
         return self._model_name
 
-    async def generate_patch(self, old_api, new_api, code_snippet, context,
-                              defect_description="", observed_evidence="") -> str:
+    async def generate_patch(
+        self, old_api, new_api, code_snippet, context, defect_description="", observed_evidence=""
+    ) -> str:
         prompt = PATCH_PROMPT_TEMPLATE.format(
-            old_api=old_api or "(not applicable)", new_api=new_api or "(not applicable)",
-            code_snippet=code_snippet, context=context,
+            old_api=old_api or "(not applicable)",
+            new_api=new_api or "(not applicable)",
+            code_snippet=code_snippet,
+            context=context,
             defect_description=defect_description or "Runtime defect detected.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
@@ -118,14 +140,27 @@ class XAIProvider(PatchProvider):
             logger.error("XAIProvider.generate_patch failed: %s", exc)
             raise
 
-    async def generate_patch_candidates(self, old_api, new_api, code_snippet, context,
-                                         defect_description="", observed_evidence="", n=3) -> list[str]:
-        return [await self.generate_patch(old_api, new_api, code_snippet, context,
-                                          defect_description, observed_evidence) for _ in range(n)]
+    async def generate_patch_candidates(
+        self,
+        old_api,
+        new_api,
+        code_snippet,
+        context,
+        defect_description="",
+        observed_evidence="",
+        n=3,
+    ) -> list[str]:
+        return [
+            await self.generate_patch(
+                old_api, new_api, code_snippet, context, defect_description, observed_evidence
+            )
+            for _ in range(n)
+        ]
 
     async def classify_failure(self, failure_type, error_context) -> FailureClassification:
         prompt = CLASSIFY_FAILURE_PROMPT_TEMPLATE.format(
-            failure_type=failure_type, error_context=error_context)
+            failure_type=failure_type, error_context=error_context
+        )
         try:
             response = await self.client.chat.completions.create(
                 model=self._model_name,
@@ -139,6 +174,7 @@ class XAIProvider(PatchProvider):
 
 
 # ── DeepSeek ────────────────────────────────────────────────────────────────
+
 
 class DeepSeekProvider(PatchProvider):
     """Patch provider backed by DeepSeek via OpenAI-compatible API."""
@@ -160,11 +196,14 @@ class DeepSeekProvider(PatchProvider):
     def model_name(self) -> str:
         return self._model_name
 
-    async def generate_patch(self, old_api, new_api, code_snippet, context,
-                              defect_description="", observed_evidence="") -> str:
+    async def generate_patch(
+        self, old_api, new_api, code_snippet, context, defect_description="", observed_evidence=""
+    ) -> str:
         prompt = PATCH_PROMPT_TEMPLATE.format(
-            old_api=old_api or "(not applicable)", new_api=new_api or "(not applicable)",
-            code_snippet=code_snippet, context=context,
+            old_api=old_api or "(not applicable)",
+            new_api=new_api or "(not applicable)",
+            code_snippet=code_snippet,
+            context=context,
             defect_description=defect_description or "Runtime defect detected.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
@@ -179,14 +218,27 @@ class DeepSeekProvider(PatchProvider):
             logger.error("DeepSeekProvider.generate_patch failed: %s", exc)
             raise
 
-    async def generate_patch_candidates(self, old_api, new_api, code_snippet, context,
-                                         defect_description="", observed_evidence="", n=3) -> list[str]:
-        return [await self.generate_patch(old_api, new_api, code_snippet, context,
-                                          defect_description, observed_evidence) for _ in range(n)]
+    async def generate_patch_candidates(
+        self,
+        old_api,
+        new_api,
+        code_snippet,
+        context,
+        defect_description="",
+        observed_evidence="",
+        n=3,
+    ) -> list[str]:
+        return [
+            await self.generate_patch(
+                old_api, new_api, code_snippet, context, defect_description, observed_evidence
+            )
+            for _ in range(n)
+        ]
 
     async def classify_failure(self, failure_type, error_context) -> FailureClassification:
         prompt = CLASSIFY_FAILURE_PROMPT_TEMPLATE.format(
-            failure_type=failure_type, error_context=error_context)
+            failure_type=failure_type, error_context=error_context
+        )
         try:
             response = await self.client.chat.completions.create(
                 model=self._model_name,
@@ -200,6 +252,7 @@ class DeepSeekProvider(PatchProvider):
 
 
 # ── Together AI ─────────────────────────────────────────────────────────────
+
 
 class TogetherProvider(PatchProvider):
     """Patch provider backed by Together AI via OpenAI-compatible API."""
@@ -221,11 +274,14 @@ class TogetherProvider(PatchProvider):
     def model_name(self) -> str:
         return self._model_name
 
-    async def generate_patch(self, old_api, new_api, code_snippet, context,
-                              defect_description="", observed_evidence="") -> str:
+    async def generate_patch(
+        self, old_api, new_api, code_snippet, context, defect_description="", observed_evidence=""
+    ) -> str:
         prompt = PATCH_PROMPT_TEMPLATE.format(
-            old_api=old_api or "(not applicable)", new_api=new_api or "(not applicable)",
-            code_snippet=code_snippet, context=context,
+            old_api=old_api or "(not applicable)",
+            new_api=new_api or "(not applicable)",
+            code_snippet=code_snippet,
+            context=context,
             defect_description=defect_description or "Runtime defect detected.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
@@ -240,14 +296,27 @@ class TogetherProvider(PatchProvider):
             logger.error("TogetherProvider.generate_patch failed: %s", exc)
             raise
 
-    async def generate_patch_candidates(self, old_api, new_api, code_snippet, context,
-                                         defect_description="", observed_evidence="", n=3) -> list[str]:
-        return [await self.generate_patch(old_api, new_api, code_snippet, context,
-                                          defect_description, observed_evidence) for _ in range(n)]
+    async def generate_patch_candidates(
+        self,
+        old_api,
+        new_api,
+        code_snippet,
+        context,
+        defect_description="",
+        observed_evidence="",
+        n=3,
+    ) -> list[str]:
+        return [
+            await self.generate_patch(
+                old_api, new_api, code_snippet, context, defect_description, observed_evidence
+            )
+            for _ in range(n)
+        ]
 
     async def classify_failure(self, failure_type, error_context) -> FailureClassification:
         prompt = CLASSIFY_FAILURE_PROMPT_TEMPLATE.format(
-            failure_type=failure_type, error_context=error_context)
+            failure_type=failure_type, error_context=error_context
+        )
         try:
             response = await self.client.chat.completions.create(
                 model=self._model_name,
@@ -261,6 +330,7 @@ class TogetherProvider(PatchProvider):
 
 
 # ── Nvidia Nemotron ──────────────────────────────────────────────────────────
+
 
 class NemotronProvider(PatchProvider):
     """Patch provider backed by Nvidia Nemotron via OpenAI-compatible API."""
@@ -282,11 +352,14 @@ class NemotronProvider(PatchProvider):
     def model_name(self) -> str:
         return self._model_name
 
-    async def generate_patch(self, old_api, new_api, code_snippet, context,
-                              defect_description="", observed_evidence="") -> str:
+    async def generate_patch(
+        self, old_api, new_api, code_snippet, context, defect_description="", observed_evidence=""
+    ) -> str:
         prompt = PATCH_PROMPT_TEMPLATE.format(
-            old_api=old_api or "(not applicable)", new_api=new_api or "(not applicable)",
-            code_snippet=code_snippet, context=context,
+            old_api=old_api or "(not applicable)",
+            new_api=new_api or "(not applicable)",
+            code_snippet=code_snippet,
+            context=context,
             defect_description=defect_description or "Runtime defect detected.",
             observed_evidence=observed_evidence or "No additional evidence provided.",
         )
@@ -301,14 +374,27 @@ class NemotronProvider(PatchProvider):
             logger.error("NemotronProvider.generate_patch failed: %s", exc)
             raise
 
-    async def generate_patch_candidates(self, old_api, new_api, code_snippet, context,
-                                         defect_description="", observed_evidence="", n=3) -> list[str]:
-        return [await self.generate_patch(old_api, new_api, code_snippet, context,
-                                          defect_description, observed_evidence) for _ in range(n)]
+    async def generate_patch_candidates(
+        self,
+        old_api,
+        new_api,
+        code_snippet,
+        context,
+        defect_description="",
+        observed_evidence="",
+        n=3,
+    ) -> list[str]:
+        return [
+            await self.generate_patch(
+                old_api, new_api, code_snippet, context, defect_description, observed_evidence
+            )
+            for _ in range(n)
+        ]
 
     async def classify_failure(self, failure_type, error_context) -> FailureClassification:
         prompt = CLASSIFY_FAILURE_PROMPT_TEMPLATE.format(
-            failure_type=failure_type, error_context=error_context)
+            failure_type=failure_type, error_context=error_context
+        )
         try:
             response = await self.client.chat.completions.create(
                 model=self._model_name,

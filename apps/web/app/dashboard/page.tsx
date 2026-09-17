@@ -11,6 +11,8 @@ export default function DashboardOverview() {
   const [repos, setRepos] = useState<(Repo & { category?: string })[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncNotice, setSyncNotice] = useState<string | null>(null);
   const [apiError, setApiError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"personal" | "benchmark">("personal");
 
@@ -18,14 +20,42 @@ export default function DashboardOverview() {
     process.env.NEXT_PUBLIC_GITHUB_APP_NAME || "telex-agent-dev"
   }/installations/new`;
 
+  const handleSync = async () => {
+    setIsSyncing(true);
+    try {
+      const { syncRepos, getStats } = await import("@/lib/api");
+      const [reposRes, statsRes] = await Promise.allSettled([
+        syncRepos(activeTab === "benchmark"),
+        getStats(),
+      ]);
+      if (reposRes.status === "fulfilled" && reposRes.value) {
+        setRepos(reposRes.value as (Repo & { category?: string })[]);
+        const count = reposRes.value.filter((r) => (r as any).category !== "benchmark").length;
+        setSyncNotice(`Synced ${count} personal repositories from GitHub App`);
+        setTimeout(() => setSyncNotice(null), 4000);
+      }
+      if (statsRes.status === "fulfilled") {
+        setStats(statsRes.value);
+      }
+    } catch {
+      // Keep existing data
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const switchTab = (tab: "personal" | "benchmark") => {
+    setActiveTab(tab);
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    async function loadData() {
+    async function loadData(forceSync: boolean = false) {
       try {
         const { getRepos, getStats } = await import("@/lib/api");
         const [reposData, statsData] = await Promise.allSettled([
-          getRepos(),
+          getRepos(forceSync, activeTab === "benchmark"),
           getStats(),
         ]);
 
@@ -48,17 +78,22 @@ export default function DashboardOverview() {
       }
     }
 
-    loadData();
-    const timer = setInterval(loadData, 10000);
+    loadData(true);
+    const timer = setInterval(() => loadData(false), 8000);
+
+    const onFocus = () => loadData(true);
+    window.addEventListener("focus", onFocus);
+
     return () => {
       isMounted = false;
       clearInterval(timer);
+      window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [activeTab]);
 
   const displayedRepos = repos.filter((r) => {
-    const isPersonal = r.category === "personal" || r.owner?.toLowerCase() === "kesavaraja67";
-    return activeTab === "personal" ? isPersonal : !isPersonal;
+    const isBenchmark = r.category === "benchmark";
+    return activeTab === "benchmark" ? isBenchmark : !isBenchmark;
   });
 
   const totalPatches = stats?.patches_generated ?? repos.reduce((acc, r) => acc + (r.patch_count || 0), 0);
@@ -90,6 +125,22 @@ export default function DashboardOverview() {
 
         {/* Header Actions */}
         <div className="flex items-center gap-3 self-start sm:self-center">
+          <button
+            onClick={handleSync}
+            disabled={isSyncing}
+            className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-lg border border-white/20 bg-white/[0.04] text-white hover:bg-white/[0.08] hover:border-white font-mono text-xs transition-all active:scale-[0.98] cursor-pointer"
+          >
+            <svg
+              className={`w-3.5 h-3.5 ${isSyncing ? "animate-spin text-white" : "text-[#A1A1AA]"}`}
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span>{isSyncing ? "Syncing..." : "Sync Repos"}</span>
+          </button>
+
           <a
             href={githubInstallUrl}
             target="_blank"
@@ -114,6 +165,18 @@ export default function DashboardOverview() {
           </div>
         </div>
       </div>
+
+      {syncNotice && (
+        <motion.div
+          initial={{ opacity: 0, y: -6 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0 }}
+          className="px-4 py-2.5 rounded-xl bg-white/[0.08] border border-white/20 text-white font-mono text-xs flex items-center gap-2.5"
+        >
+          <span className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#FFFFFF]" />
+          <span>{syncNotice}</span>
+        </motion.div>
+      )}
 
       {/* State 1: Loading Skeleton */}
       {isLoading ? (
@@ -143,8 +206,8 @@ export default function DashboardOverview() {
             Retry Connection
           </button>
         </SpotlightCard>
-      ) : repos.length === 0 ? (
-        /* State 2: Empty State (0 repos connected) */
+      ) : displayedRepos.length === 0 ? (
+        /* State 2: Empty State (0 repos in current view) */
         <SpotlightCard
           spotlightColor="rgba(255, 255, 255, 0.08)"
           className="p-8 sm:p-12 bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl flex flex-col items-center text-center gap-6 shadow-2xl"
@@ -156,28 +219,65 @@ export default function DashboardOverview() {
             </svg>
           </div>
 
+          {/* Interactive tab switcher so user can toggle between tabs even when empty */}
+          <div className="flex items-center p-1 rounded-lg bg-white/5 border border-white/10">
+            <button
+              onClick={() => switchTab("personal")}
+              className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
+                activeTab === "personal"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-[#71717A] hover:text-white"
+              }`}
+            >
+              My Repositories
+            </button>
+            <button
+              onClick={() => switchTab("benchmark")}
+              className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
+                activeTab === "benchmark"
+                  ? "bg-white text-black shadow-sm"
+                  : "text-[#71717A] hover:text-white"
+              }`}
+            >
+              Industry Benchmarks
+            </button>
+          </div>
+
           <div className="flex flex-col gap-2 max-w-lg">
             <h2 className="font-mono font-bold text-xl text-white">
-              Connect your first repository
+              {activeTab === "benchmark"
+                ? "No benchmark repositories found"
+                : "Connect your first repository"}
             </h2>
             <p className="font-sans text-xs sm:text-sm text-[#A1A1AA] leading-relaxed">
-              Install the Telex GitHub App to monitor your repositories. Whenever an upstream dependency ships a breaking release, Telex parses call sites with Tree-Sitter, generates verified fixes, and opens ready-to-merge pull requests.
+              {activeTab === "benchmark"
+                ? "No benchmark targets are currently available. Switch to My Repositories to view your active codebases."
+                : "Install the Telex GitHub App to monitor your repositories. Whenever an upstream dependency ships a breaking release, Telex parses call sites with Tree-Sitter, generates verified fixes, and opens ready-to-merge pull requests."}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center justify-center gap-3">
-            <a
-              href={githubInstallUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-lg hover:shadow-white/10"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19" />
-                <line x1="5" y1="12" x2="19" y2="12" />
-              </svg>
-              <span>Connect Repository via GitHub App</span>
-            </a>
+            {activeTab === "personal" ? (
+              <a
+                href={githubInstallUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-lg hover:shadow-white/10"
+              >
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="12" y1="5" x2="12" y2="19" />
+                  <line x1="5" y1="12" x2="19" y2="12" />
+                </svg>
+                <span>Connect Repository via GitHub App</span>
+              </a>
+            ) : (
+              <button
+                onClick={() => switchTab("personal")}
+                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-lg hover:shadow-white/10"
+              >
+                <span>← View My Repositories</span>
+              </button>
+            )}
             <Link
               href="/dashboard/activity"
               className="inline-flex items-center gap-2 px-4 py-2.5 rounded-lg border border-white/20 bg-white/5 text-white font-mono text-xs hover:bg-white/10 transition-colors"
@@ -211,7 +311,7 @@ export default function DashboardOverview() {
                 Active Targets
               </span>
               <div className="flex items-baseline gap-1.5">
-                <span className="font-mono font-bold text-2xl text-white">{repos.length}</span>
+                <span className="font-mono font-bold text-2xl text-white">{displayedRepos.length}</span>
                 <span className="font-mono text-[10px] text-[#A1A1AA]">monitored</span>
               </div>
             </div>
@@ -315,7 +415,7 @@ export default function DashboardOverview() {
             <div className="flex items-center gap-2.5 self-start sm:self-auto">
               <div className="inline-flex p-0.5 rounded-lg bg-white/[0.04] border border-white/10 backdrop-blur-md">
                 <button
-                  onClick={() => setActiveTab("personal")}
+                  onClick={() => switchTab("personal")}
                   className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
                     activeTab === "personal"
                       ? "bg-white text-black shadow-sm"
@@ -325,7 +425,7 @@ export default function DashboardOverview() {
                   My Repositories
                 </button>
                 <button
-                  onClick={() => setActiveTab("benchmark")}
+                  onClick={() => switchTab("benchmark")}
                   className={`px-3 py-1 rounded-md font-mono text-xs font-medium transition-all ${
                     activeTab === "benchmark"
                       ? "bg-white text-black shadow-sm"

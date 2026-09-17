@@ -6,6 +6,7 @@ import LiveMarquee from "@/components/marketing/LiveMarquee";
 import HowItWorks from "@/components/marketing/HowItWorks";
 import FreeStrip from "@/components/marketing/FreeStrip";
 import Marginalia from "@/components/marketing/Marginalia";
+import { API_BASE } from "@/lib/api";
 
 export const metadata: Metadata = {
   title: "Telex — Autonomous Self-Healing for Your Codebase",
@@ -44,7 +45,7 @@ export default function LandingPage() {
             {[
               { label: "GITHUB", href: "https://github.com/Kesavaraja67/telex" },
               { label: "DASHBOARD", href: "/dashboard" },
-              { label: "STATUS", href: "https://telex-api.onrender.com/health" },
+              { label: "STATUS", href: `${API_BASE}/health` },
             ].map((link) =>
               link.href.startsWith("/") ? (
                 <Link
