@@ -7,7 +7,7 @@ import os
 import secrets
 import uuid
 from datetime import datetime, timedelta, timezone
-from urllib.parse import quote, urlencode, urlparse
+from urllib.parse import urlencode, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
@@ -254,7 +254,6 @@ async def github_callback(code: str, request: Request, state: str | None = None)
     is_prod = bool(os.getenv("RENDER") or settings.environment == "production")
     is_secure = request.url.scheme == "https" or is_prod
     same_site_val = "none" if is_secure else "lax"
-    safe_login_cookie = quote(user_login or "", safe="")
 
     # Set signed session token containing user id
     response.set_cookie(
@@ -265,10 +264,10 @@ async def github_callback(code: str, request: Request, state: str | None = None)
         secure=is_secure,
         samesite=same_site_val,
     )
-    # Set display cookie for client UI
+    # Set indicator cookie for client UI presence check (constant value to prevent cookie injection)
     response.set_cookie(
         key="telex_user",
-        value=safe_login_cookie,
+        value="1",
         max_age=60 * 60 * 24 * 30,
         httponly=False,
         secure=is_secure,
@@ -353,7 +352,6 @@ async def dev_login(request: Request, login: str = "kesavaraja67"):
     session_token = create_session_token(user_id_str)
     web_base = os.getenv("WEB_APP_URL", "http://localhost:3000")
     redirect_url = f"{web_base}/dashboard"
-    safe_login = quote(login or "", safe="")
     response = RedirectResponse(url=redirect_url, status_code=303)
     response.set_cookie(
         key="telex_session",
@@ -365,7 +363,7 @@ async def dev_login(request: Request, login: str = "kesavaraja67"):
     )
     response.set_cookie(
         key="telex_user",
-        value=safe_login,
+        value="1",
         max_age=60 * 60 * 24 * 30,
         httponly=False,
         secure=False,
