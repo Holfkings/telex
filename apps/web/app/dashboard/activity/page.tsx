@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
@@ -13,37 +13,30 @@ export default function ActivityPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [apiError, setApiError] = useState<string | null>(null);
 
-  useEffect(() => {
-    let isMounted = true;
-
-    async function loadActivity() {
-      try {
-        const { getActivity } = await import("@/lib/api");
-        const data = await getActivity();
-        if (isMounted) {
-          if (data?.activities) {
-            setActivities(data.activities);
-            setApiError(null);
-          } else {
-            setApiError("Unable to stream live event log.");
-          }
-        }
-      } catch (err: any) {
-        if (isMounted) {
-          setApiError(err?.message || "Failed to connect to telemetry backend.");
-        }
-      } finally {
-        if (isMounted) setIsLoading(false);
+  const loadActivity = useCallback(async () => {
+    try {
+      const { getActivity } = await import("@/lib/api");
+      const data = await getActivity();
+      if (data?.activities) {
+        setActivities(data.activities);
+        setApiError(null);
+      } else {
+        setApiError("Unable to stream live event log.");
       }
+    } catch (err: any) {
+      setApiError(err?.message || "Failed to connect to telemetry backend.");
+    } finally {
+      setIsLoading(false);
     }
+  }, []);
 
+  useEffect(() => {
     loadActivity();
     const timer = setInterval(loadActivity, 10000);
     return () => {
-      isMounted = false;
       clearInterval(timer);
     };
-  }, []);
+  }, [loadActivity]);
 
   return (
     <div className="flex flex-col gap-6 relative z-10 max-w-7xl mx-auto w-full">
@@ -155,6 +148,30 @@ export default function ActivityPage() {
       ) : (
         /* State 3: Populated Feed */
         <div className="flex flex-col gap-2.5">
+          {apiError && (
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg
+                  className="w-4 h-4 stroke-current flex-shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span className="truncate">{apiError} (Showing cached event log)</span>
+              </div>
+              <button
+                onClick={() => loadActivity()}
+                className="px-3 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 transition-colors cursor-pointer flex-shrink-0 ml-3"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           <AnimatePresence mode="popLayout">
             {activities.map((item) => (
               <motion.div

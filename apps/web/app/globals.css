@@ -192,6 +192,14 @@ h1, h2, h3, h4, h5, h6 {
   animation: radar-ping 2.5s cubic-bezier(0, 0, 0.2, 1) infinite;
 }
 
+/* 7. Reduced Motion Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .animate-shimmer::after,
+  .animate-radar-ping {
+    animation: none;
+  }
+}
+
 /* ─── Diff Syntax (Pure Monochrome) ─────────────────────────────────────── */
 .diff-add {
   color: #FFFFFF;

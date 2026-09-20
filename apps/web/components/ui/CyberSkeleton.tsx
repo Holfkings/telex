@@ -22,8 +22,7 @@ export function CyberSkeleton({
 
   return (
     <div
-      role="status"
-      aria-label="Loading"
+      aria-hidden="true"
       className={`animate-shimmer bg-white/[0.04] border border-white/[0.06] ${variantClasses} ${className}`}
     />
   );

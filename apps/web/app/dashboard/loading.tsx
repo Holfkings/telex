@@ -2,7 +2,11 @@ import { CyberSkeletonMetric, CyberSkeletonRepo } from "@/components/ui/CyberSke
 
 export default function DashboardLoading() {
   return (
-    <div className="flex flex-col gap-6 w-full max-w-7xl mx-auto animate-fade-in">
+    <div
+      className="flex flex-col gap-6 w-full max-w-7xl mx-auto animate-fade-in"
+      role="status"
+      aria-label="Loading dashboard"
+    >
       {/* Top Header Skeleton */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex flex-col gap-2">

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
@@ -53,36 +53,32 @@ export default function DashboardOverview() {
     setActiveTab(tab);
   };
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadData = useCallback(async (forceSync: boolean = false) => {
+    try {
+      const { getRepos, getStats } = await import("@/lib/api");
+      const [reposData, statsData] = await Promise.allSettled([
+        getRepos(forceSync, activeTab === "benchmark"),
+        getStats(),
+      ]);
 
-    async function loadData(forceSync: boolean = false) {
-      try {
-        const { getRepos, getStats } = await import("@/lib/api");
-        const [reposData, statsData] = await Promise.allSettled([
-          getRepos(forceSync, activeTab === "benchmark"),
-          getStats(),
-        ]);
-
-        if (!isMounted) return;
-
-        if (reposData.status === "fulfilled") {
-          setRepos((reposData.value || []) as (Repo & { category?: string })[]);
-          setApiError(null);
-        } else {
-          setApiError("Unable to fetch repository telemetry from API backend.");
-        }
-
-        if (statsData.status === "fulfilled") {
-          setStats(statsData.value);
-        }
-      } catch (err: any) {
-        if (isMounted) setApiError(err?.message || "Failed to connect to API backend.");
-      } finally {
-        if (isMounted) setIsLoading(false);
+      if (reposData.status === "fulfilled") {
+        setRepos((reposData.value || []) as (Repo & { category?: string })[]);
+        setApiError(null);
+      } else {
+        setApiError("Unable to fetch repository telemetry from API backend.");
       }
-    }
 
+      if (statsData.status === "fulfilled") {
+        setStats(statsData.value);
+      }
+    } catch (err: any) {
+      setApiError(err?.message || "Failed to connect to API backend.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     loadData(true);
     const timer = setInterval(() => loadData(false), 8000);
 
@@ -90,11 +86,10 @@ export default function DashboardOverview() {
     window.addEventListener("focus", onFocus);
 
     return () => {
-      isMounted = false;
       clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [activeTab]);
+  }, [loadData]);
 
   const displayedRepos = repos.filter((r) => {
     const isBenchmark = r.category === "benchmark";
@@ -345,6 +340,30 @@ export default function DashboardOverview() {
       ) : (
         /* State 3: Populated State */
         <>
+          {apiError && (
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg
+                  className="w-4 h-4 stroke-current flex-shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span className="truncate">{apiError} (Showing cached telemetry)</span>
+              </div>
+              <button
+                onClick={() => loadData(true)}
+                className="px-3 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 transition-colors cursor-pointer flex-shrink-0 ml-3"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {/* Metric Strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 rounded-xl border border-white/10 bg-black/60 backdrop-blur-xl divide-y md:divide-y-0 md:divide-x divide-white/[0.08] shadow-lg">
             <div className="p-4 flex flex-col gap-0.5">
