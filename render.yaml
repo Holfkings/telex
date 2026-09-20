@@ -13,43 +13,6 @@ services:
       - key: PYTHON_VERSION
         value: 3.11.11
       - key: EMBEDDED_WORKER
-        value: "false"
-      - key: DATABASE_URL
-        sync: false
-      - key: GITHUB_APP_ID
-        sync: false
-      - key: GITHUB_APP_CLIENT_ID
-        sync: false
-      - key: GITHUB_APP_PRIVATE_KEY
-        sync: false
-      - key: GITHUB_WEBHOOK_SECRET
-        sync: false
-      - key: GITHUB_OAUTH_CLIENT_ID
-        sync: false
-      - key: GITHUB_OAUTH_CLIENT_SECRET
-        sync: false
-      - key: GEMINI_API_KEY
-        sync: false
-      - key: LLM_PROVIDER_DEFAULT
-        value: gemini
-      - key: NEXTAUTH_SECRET
-        sync: false
-
-  # ── Autonomous Background Worker ─────────────────────────────────────────────
-  # Runs the job queue: generate_patch (npm ci + tsc + npm test), recover_runtime,
-  # open_pr, etc. Isolated from the API so heavy verification never OOMs the web service.
-  # Starter plan provides 512 MB dedicated RAM for the worker container.
-  - type: worker
-    name: telex-worker
-    runtime: python
-    plan: starter
-    rootDir: apps/api
-    buildCommand: pip install -r requirements.txt
-    startCommand: python worker.py
-    envVars:
-      - key: PYTHON_VERSION
-        value: 3.11.11
-      - key: EMBEDDED_WORKER
         value: "true"
       - key: DATABASE_URL
         sync: false
@@ -71,3 +34,39 @@ services:
         value: gemini
       - key: NEXTAUTH_SECRET
         sync: false
+
+  # ── Paid Dedicated Background Worker (Optional Scale-Up) ─────────────────────
+  # When upgrading to a paid plan ($7/mo starter), uncomment this block and set
+  # EMBEDDED_WORKER: "false" in the web service above for dedicated worker isolation.
+  # - type: worker
+  #   name: telex-worker
+  #   runtime: python
+  #   plan: starter
+  #   rootDir: apps/api
+  #   buildCommand: pip install -r requirements.txt
+  #   startCommand: python worker.py
+  #   envVars:
+  #     - key: PYTHON_VERSION
+  #       value: 3.11.11
+  #     - key: EMBEDDED_WORKER
+  #       value: "true"
+  #     - key: DATABASE_URL
+  #       sync: false
+  #     - key: GITHUB_APP_ID
+  #       sync: false
+  #     - key: GITHUB_APP_CLIENT_ID
+  #       sync: false
+  #     - key: GITHUB_APP_PRIVATE_KEY
+  #       sync: false
+  #     - key: GITHUB_WEBHOOK_SECRET
+  #       sync: false
+  #     - key: GITHUB_OAUTH_CLIENT_ID
+  #       sync: false
+  #     - key: GITHUB_OAUTH_CLIENT_SECRET
+  #       sync: false
+  #     - key: GEMINI_API_KEY
+  #       sync: false
+  #     - key: LLM_PROVIDER_DEFAULT
+  #       value: gemini
+  #     - key: NEXTAUTH_SECRET
+  #       sync: false
