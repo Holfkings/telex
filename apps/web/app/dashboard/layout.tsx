@@ -118,37 +118,18 @@ export default function DashboardLayout({
   // ── 1. Checking Session Loading Screen ─────────────────────────────────────
   if (authStatus === "checking") {
     return (
-      <div className="flex min-h-screen bg-black text-[#F2F1ED] items-center justify-center font-mono relative overflow-hidden">
-        <CyberGridBackground />
-        <div className="animate-terminal-scan" />
-        <div className="relative z-10 flex flex-col items-center gap-6 text-center p-8 max-w-sm w-full">
-          {/* Concentric Radar Sweep Indicator */}
-          <div className="relative w-24 h-24 flex items-center justify-center">
-            <div className="absolute inset-0 rounded-full border border-white/10 animate-ping opacity-25" />
-            <div className="absolute inset-2 rounded-full border border-white/15 animate-pulse" />
-            <div className="absolute inset-5 rounded-full border border-white/25" />
-            <div className="absolute inset-0 rounded-full border border-dashed border-white/40 animate-spin [animation-duration:6s]" />
-            <TelexLogo size={32} withBackground={false} />
-          </div>
-
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex items-center gap-2.5">
-              <span className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#FFFFFF]" />
-              <span className="text-xs uppercase tracking-[0.25em] text-white font-bold">
-                Radar Gateway
-              </span>
-            </div>
-            <span className="text-[11px] text-[#A1A1AA] tracking-wider uppercase">
-              Verifying Operator Credentials…
+      <div
+        className="flex min-h-screen bg-black items-center justify-center font-mono"
+        role="status"
+        aria-label="Loading dashboard"
+      >
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
+          <TelexLogo size={32} withBackground={true} className="animate-pulse" />
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <span className="text-xs text-[#71717A] tracking-wider uppercase">
+              Loading dashboard...
             </span>
-          </div>
-
-          <div className="w-full bg-white/[0.03] border border-white/10 rounded-lg p-2.5 flex items-center justify-between text-[10px] text-[#71717A]">
-            <span className="flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              <span>DAEMON ONLINE</span>
-            </span>
-            <span className="font-mono">INITIALIZING TELEMETRY</span>
           </div>
         </div>
       </div>

@@ -33,7 +33,7 @@ The `apps/web` application is the unified operator dashboard and marketing porta
 - **Animations**: Motion React (`motion/react`), Anime.js
 - **3D Graphics**: Three.js WebGL Canvas
 - **Typography**: Space Grotesk, Plus Jakarta Sans, Geist Mono
-- **Deployment**: Vercel (`https://telex-pi.vercel.app`)
+- **Deployment**: Vercel
 
 ---
 

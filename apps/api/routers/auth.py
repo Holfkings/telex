@@ -35,9 +35,6 @@ JWT_ALGORITHM = "HS256"
 # Import this in any router that must be protected:
 #   from routers.auth import require_auth
 #   @router.get("/protected", dependencies=[Depends(require_auth)])
-#
-# Payment-facing endpoints (create-order, verify-signature, webhook) must
-# remain open because Aura Drops customers are anonymous.
 
 
 async def require_auth(request: Request) -> dict:
@@ -236,7 +233,7 @@ async def github_callback(code: str, request: Request, state: str | None = None)
         user_id_str = str(user.id)
 
     # ── Build redirect response with session cookie ──────────────────────────
-    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "https://telex-pi.vercel.app"
+    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "http://localhost:3000"
 
     session_token = create_session_token(user_id_str)
 
@@ -316,7 +313,7 @@ async def get_current_user(request: Request):
 @router.get("/logout")
 async def logout(request: Request):
     """Clear session cookie and redirect to home."""
-    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "https://telex-pi.vercel.app"
+    web_base = os.getenv("WEB_APP_URL") or settings.web_app_url or "http://localhost:3000"
     response = RedirectResponse(url=f"{web_base}/")
     response.delete_cookie(key="telex_session")
     response.delete_cookie(key="telex_user")

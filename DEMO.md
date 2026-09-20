@@ -6,10 +6,10 @@ This guide walks through evaluating Telex end-to-end:
 
 ---
 
-## Live Demo URLs
-- **Telex Dashboard**: [https://telex-pi.vercel.app](https://telex-pi.vercel.app)
-- **Backend API**: [https://telex-api.onrender.com](https://telex-api.onrender.com)
-- **API Health**: [https://telex-api.onrender.com/health](https://telex-api.onrender.com/health)
+## Live URLs
+- **Telex Dashboard**: `http://localhost:3000` (or configured `WEB_APP_URL`)
+- **Backend API**: `http://localhost:8000` (or configured `NEXT_PUBLIC_API_URL`)
+- **API Health**: `http://localhost:8000/health`
 
 ---
 
