@@ -12,26 +12,15 @@ All contributors and maintainers are expected to follow our [Code of Conduct](CO
 
 ---
 
-## Issue Assignment & Contribution Policies
+## Contribution Workflow & Policies
 
-To ensure fair collaboration, prevent duplicate efforts, and maintain an orderly workflow, all contributors must follow these rules:
+We welcome community contributions. To keep collaboration effective and maintain high code quality, please keep the following guidelines in mind:
 
-### 1. Request Assignment Before Starting Work
-- **Do not start work or submit a pull request without being officially assigned first.**
-- If you want to work on an open issue, leave a professional comment on the issue asking a maintainer to assign it to you:
-  > *"Hi maintainers! I would like to work on this issue. Could you please assign it to me?"*
-- Wait until a maintainer formally assigns the issue to you on GitHub before starting implementation.
+### 1. Large Features vs. Small Fixes
+- **Large Features & Architecture Changes**: For substantial new features, schema updates, or architectural changes, please open an issue (or comment on an existing one) to discuss your proposal before starting. This ensures alignment with the project roadmap and prevents duplicate effort.
+- **Small Fixes, Bug Fixes & Documentation**: Bug fixes, typo corrections, documentation improvements, and test coverage additions do not require prior assignment — feel free to open a pull request directly!
 
-### 2. One Contributor per Issue
-- **Each issue is assigned to exactly one (1) contributor at a time.**
-- Two people cannot work on the same issue at the same time. This avoids wasted effort and conflicting solutions.
-- If an assigned contributor is inactive for more than 7 consecutive days without posting a status update, maintainers reserve the right to reassign the issue to another contributor.
-
-### 3. Maximum 2 Active Issues per Contributor
-- A contributor can be assigned to **at most two (2) active issues at the same time**.
-- Once you complete and merge your open pull requests, you may request assignment on new issues.
-
-### 4. Professional Conversation Only
+### 2. Respectful & Professional Communication
 - All communications across issues, pull requests, code reviews, and discussions must strictly remain **polite, courteous, constructive, and professional**.
 - Always explain technical decisions clearly, ask questions respectfully, and treat maintainers and fellow contributors with dignity.
 - Unprofessional language, personal attacks, sarcasm, or dismissive attitudes will not be tolerated and will result in warnings or restrictions under our [Code of Conduct](CODE_OF_CONDUCT.md).

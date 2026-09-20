@@ -6,6 +6,7 @@ import { motion } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import BorderBeam from "@/components/ui/BorderBeam";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import { CyberSkeletonPatch } from "@/components/ui/CyberSkeleton";
 import DiffViewer from "@/components/dashboard/DiffViewer";
 import type { RepoDetails, AIExplanation, PatchSummary } from "@/lib/api";
 
@@ -99,10 +100,9 @@ export default function RepoDetailPage({
   // State 1: Loading
   if (isLoading && !repo) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-center">
+      <div className="relative z-10 w-full" role="status" aria-label="Loading repository telemetry">
         <CyberGridBackground />
-        <div className="w-8 h-8 rounded-full border-2 border-white/20 border-t-white animate-spin" />
-        <div className="text-xs font-mono text-[#71717A]">Loading repository telemetry…</div>
+        <CyberSkeletonPatch />
       </div>
     );
   }
@@ -110,18 +110,44 @@ export default function RepoDetailPage({
   // Not found
   if (notFound || !repo) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-center">
+      <div className="flex flex-col items-center justify-center min-h-[60vh] p-4 text-center">
         <CyberGridBackground />
-        <div className="font-mono text-sm text-white font-semibold">Repository not connected</div>
-        <div className="text-xs text-[#71717A] max-w-sm">
-          This repository is not registered with the Telex GitHub App or has been uninstalled.
-        </div>
-        <Link
-          href="/dashboard/repos"
-          className="mt-2 text-xs font-mono px-3.5 py-1.5 rounded-lg bg-white/10 text-white border border-white/15 hover:bg-white/20 transition-all"
+        <SpotlightCard
+          spotlightColor="rgba(255, 255, 255, 0.08)"
+          className="p-8 sm:p-12 bg-black/80 backdrop-blur-2xl border border-white/15 rounded-2xl flex flex-col items-center text-center gap-5 max-w-md w-full shadow-2xl"
+          enableTilt={false}
         >
-          ← Back to Repositories
-        </Link>
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center text-white">
+            <svg
+              className="w-7 h-7 stroke-current"
+              viewBox="0 0 24 24"
+              fill="none"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <rect width="18" height="18" x="3" y="3" rx="2" />
+              <line x1="9" y1="9" x2="15" y2="15" />
+              <line x1="15" y1="9" x2="9" y2="15" />
+            </svg>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <span className="font-mono text-[10px] uppercase tracking-[0.2em] text-[#A1A1AA]">
+              Target Not Found // 404
+            </span>
+            <h2 className="font-mono text-lg font-bold text-white">
+              Repository Not Registered
+            </h2>
+            <p className="font-sans text-xs text-[#A1A1AA] leading-relaxed">
+              This repository is either not authorized via the Telex GitHub App or has been removed from monitored targets.
+            </p>
+          </div>
+          <Link
+            href="/dashboard/repos"
+            className="px-4 py-2 rounded-lg bg-white text-black font-mono font-bold text-xs hover:bg-white/90 transition-all shadow-md active:scale-[0.98]"
+          >
+            ← Back to Repositories
+          </Link>
+        </SpotlightCard>
       </div>
     );
   }
@@ -411,10 +437,13 @@ export default function RepoDetailPage({
           <button
             onClick={handleRunGeminiExplain}
             disabled={isLoadingAi}
-            className="font-mono text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-white text-black hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
+            className="font-mono text-xs font-semibold px-3.5 py-1.5 rounded-lg bg-white text-black hover:bg-white/90 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center gap-1.5 self-start sm:self-auto shadow-sm cursor-pointer"
           >
             {isLoadingAi ? (
-              <span>Analyzing telemetry…</span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-3 h-3 rounded-full border-2 border-black/30 border-t-black animate-spin" />
+                <span>Analyzing AST…</span>
+              </span>
             ) : (
               <>
                 <span>Run Gemini Analysis</span>
@@ -427,6 +456,31 @@ export default function RepoDetailPage({
         {aiError && (
           <div className="p-3 rounded-lg bg-white/[0.04] border border-white/20 text-white font-mono text-xs mb-3">
             <span className="font-semibold text-white/90">Error:</span> {aiError}
+          </div>
+        )}
+
+        {isLoadingAi && (
+          <div
+            role="status"
+            aria-label="Running Gemini Analysis"
+            className="p-8 rounded-xl border border-white/10 bg-black/60 relative overflow-hidden flex flex-col items-center justify-center text-center gap-3.5 my-2 animate-fade-in"
+          >
+            <div className="animate-terminal-scan" />
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border border-white/10 animate-ping opacity-25" />
+              <div className="absolute inset-2 rounded-full border border-white/20 animate-pulse" />
+              <div className="absolute inset-0 rounded-full border border-dashed border-white/40 animate-spin [animation-duration:5s]" />
+              <span className="w-2.5 h-2.5 rounded-full bg-white shadow-[0_0_10px_#FFFFFF]" />
+            </div>
+            <div className="flex flex-col items-center gap-1">
+              <span className="font-mono text-xs text-white font-bold uppercase tracking-wider flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse shadow-[0_0_6px_#FFFFFF]" />
+                Scanning AST Call Sites &amp; Breaking Changes
+              </span>
+              <span className="font-mono text-[11px] text-[#A1A1AA]">
+                Gemini 2.5 Flash computing semantic impact, migration diffs, and blast radius…
+              </span>
+            </div>
           </div>
         )}
 

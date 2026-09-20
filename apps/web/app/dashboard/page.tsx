@@ -1,10 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import {
+  CyberSkeleton,
+  CyberSkeletonMetric,
+  CyberSkeletonRepo,
+} from "@/components/ui/CyberSkeleton";
 import type { Repo, Stats } from "@/lib/api";
 
 export default function DashboardOverview() {
@@ -48,36 +53,32 @@ export default function DashboardOverview() {
     setActiveTab(tab);
   };
 
-  useEffect(() => {
-    let isMounted = true;
+  const loadData = useCallback(async (forceSync: boolean = false) => {
+    try {
+      const { getRepos, getStats } = await import("@/lib/api");
+      const [reposData, statsData] = await Promise.allSettled([
+        getRepos(forceSync, activeTab === "benchmark"),
+        getStats(),
+      ]);
 
-    async function loadData(forceSync: boolean = false) {
-      try {
-        const { getRepos, getStats } = await import("@/lib/api");
-        const [reposData, statsData] = await Promise.allSettled([
-          getRepos(forceSync, activeTab === "benchmark"),
-          getStats(),
-        ]);
-
-        if (!isMounted) return;
-
-        if (reposData.status === "fulfilled") {
-          setRepos((reposData.value || []) as (Repo & { category?: string })[]);
-          setApiError(null);
-        } else {
-          setApiError("Unable to fetch repository telemetry from API backend.");
-        }
-
-        if (statsData.status === "fulfilled") {
-          setStats(statsData.value);
-        }
-      } catch (err: any) {
-        if (isMounted) setApiError(err?.message || "Failed to connect to API backend.");
-      } finally {
-        if (isMounted) setIsLoading(false);
+      if (reposData.status === "fulfilled") {
+        setRepos((reposData.value || []) as (Repo & { category?: string })[]);
+        setApiError(null);
+      } else {
+        setApiError("Unable to fetch repository telemetry from API backend.");
       }
-    }
 
+      if (statsData.status === "fulfilled") {
+        setStats(statsData.value);
+      }
+    } catch (err: any) {
+      setApiError(err?.message || "Failed to connect to API backend.");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [activeTab]);
+
+  useEffect(() => {
     loadData(true);
     const timer = setInterval(() => loadData(false), 8000);
 
@@ -85,11 +86,10 @@ export default function DashboardOverview() {
     window.addEventListener("focus", onFocus);
 
     return () => {
-      isMounted = false;
       clearInterval(timer);
       window.removeEventListener("focus", onFocus);
     };
-  }, [activeTab]);
+  }, [loadData]);
 
   const displayedRepos = repos.filter((r) => {
     const isBenchmark = r.category === "benchmark";
@@ -180,9 +180,45 @@ export default function DashboardOverview() {
 
       {/* State 1: Loading Skeleton */}
       {isLoading ? (
-        <div className="flex flex-col gap-6 animate-pulse">
-          <div className="grid grid-cols-2 md:grid-cols-4 h-24 rounded-xl border border-white/10 bg-black/40" />
-          <div className="h-64 rounded-xl border border-white/10 bg-black/30" />
+        <div className="flex flex-col gap-6 animate-fade-in" role="status" aria-label="Loading dashboard telemetry">
+          <CyberSkeletonMetric />
+
+          {/* Recent Breaking Changes Skeleton */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <CyberSkeleton className="w-44 h-4 bg-white/[0.06]" />
+              <CyberSkeleton className="w-24 h-4 bg-white/[0.04]" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="p-3.5 bg-black/60 border border-white/10 rounded-xl flex flex-col gap-2.5 animate-shimmer"
+                >
+                  <div className="flex items-center justify-between">
+                    <CyberSkeleton className="w-24 h-4 bg-white/[0.08]" />
+                    <CyberSkeleton className="w-16 h-4 rounded bg-white/[0.05]" />
+                  </div>
+                  <CyberSkeleton className="w-full h-3 bg-white/[0.04]" />
+                  <div className="pt-2 border-t border-white/[0.06] flex justify-between">
+                    <CyberSkeleton className="w-24 h-2.5 bg-white/[0.04]" />
+                    <CyberSkeleton className="w-16 h-2.5 bg-white/[0.03]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Fleet Controls & Monitored Repositories Skeleton */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <CyberSkeleton className="w-32 h-4 bg-white/[0.06]" />
+              <CyberSkeleton className="w-20 h-4 bg-white/[0.04]" />
+            </div>
+            <CyberSkeletonRepo />
+            <CyberSkeletonRepo />
+            <CyberSkeletonRepo />
+          </div>
         </div>
       ) : apiError && repos.length === 0 ? (
         <SpotlightCard
@@ -304,6 +340,30 @@ export default function DashboardOverview() {
       ) : (
         /* State 3: Populated State */
         <>
+          {apiError && (
+            <div className="flex items-center justify-between p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 font-mono text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <svg
+                  className="w-4 h-4 stroke-current flex-shrink-0"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  strokeWidth="2"
+                  aria-hidden="true"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <span className="truncate">{apiError} (Showing cached telemetry)</span>
+              </div>
+              <button
+                onClick={() => loadData(true)}
+                className="px-3 py-1 rounded bg-red-500/20 hover:bg-red-500/30 text-red-200 transition-colors cursor-pointer flex-shrink-0 ml-3"
+              >
+                Retry
+              </button>
+            </div>
+          )}
           {/* Metric Strip */}
           <div className="grid grid-cols-2 md:grid-cols-4 rounded-xl border border-white/10 bg-black/60 backdrop-blur-xl divide-y md:divide-y-0 md:divide-x divide-white/[0.08] shadow-lg">
             <div className="p-4 flex flex-col gap-0.5">

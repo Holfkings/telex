@@ -118,14 +118,17 @@ export default function DashboardLayout({
   // ── 1. Checking Session Loading Screen ─────────────────────────────────────
   if (authStatus === "checking") {
     return (
-      <div className="flex min-h-screen bg-black text-[#F2F1ED] items-center justify-center font-mono relative overflow-hidden">
-        <CyberGridBackground />
-        <div className="relative z-10 flex flex-col items-center gap-4 text-center p-8">
-          <TelexLogo size={36} withBackground={true} />
-          <div className="flex items-center gap-2.5 mt-3">
-            <span className="w-2 h-2 rounded-full bg-white animate-pulse shadow-[0_0_8px_#FFFFFF]" />
-            <span className="text-xs uppercase tracking-[0.25em] text-[#A1A1AA]">
-              Verifying Session // Radar Gateway
+      <div
+        className="flex min-h-screen bg-black items-center justify-center font-mono"
+        role="status"
+        aria-label="Loading dashboard"
+      >
+        <div className="flex flex-col items-center gap-3 animate-fade-in">
+          <TelexLogo size={32} withBackground={true} className="animate-pulse" />
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
+            <span className="text-xs text-[#71717A] tracking-wider uppercase">
+              Loading dashboard...
             </span>
           </div>
         </div>
