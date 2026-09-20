@@ -6,7 +6,7 @@ labels: ["enhancement"]
 assignees: ""
 ---
 
-<!-- Want to work on this feature? Please leave a comment asking to be assigned before starting work. Limit: 1 person per issue, max 2 active issues per contributor. -->
+<!-- Interested in implementing this? Feel free to leave a comment to coordinate with maintainers before starting work. -->
 
 **Is your feature request related to a problem? Please describe.**
 A clear and concise description of what the problem is. Ex. I'm always frustrated when [...]

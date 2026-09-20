@@ -40,7 +40,7 @@ Accepted formats:
 ---
 
 ## Quality & Contribution Checklist
-- [ ] **Issue Assignment**: I requested assignment and was formally assigned to this issue before starting work.
+- [ ] **Issue Linked / Scoped**: For larger feature work, the relevant issue is referenced (small fixes, typos, or documentation do not require an issue).
 - [ ] **No Force Pushes or Rebasing**: I have **NOT** force pushed (`git push --force`) or rebased this PR branch after opening it.
 - [ ] **Professional Conversation Only**: All communications in this PR, commits, and discussions are polite, constructive, and professional.
 - [ ] **Simple English Comments**: All code comments and docstrings are written strictly in **simple, plain English**.

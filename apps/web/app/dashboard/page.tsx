@@ -5,6 +5,11 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import {
+  CyberSkeleton,
+  CyberSkeletonMetric,
+  CyberSkeletonRepo,
+} from "@/components/ui/CyberSkeleton";
 import type { Repo, Stats } from "@/lib/api";
 
 export default function DashboardOverview() {
@@ -180,9 +185,45 @@ export default function DashboardOverview() {
 
       {/* State 1: Loading Skeleton */}
       {isLoading ? (
-        <div className="flex flex-col gap-6 animate-pulse">
-          <div className="grid grid-cols-2 md:grid-cols-4 h-24 rounded-xl border border-white/10 bg-black/40" />
-          <div className="h-64 rounded-xl border border-white/10 bg-black/30" />
+        <div className="flex flex-col gap-6 animate-fade-in" role="status" aria-label="Loading dashboard telemetry">
+          <CyberSkeletonMetric />
+
+          {/* Recent Breaking Changes Skeleton */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <CyberSkeleton className="w-44 h-4 bg-white/[0.06]" />
+              <CyberSkeleton className="w-24 h-4 bg-white/[0.04]" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[...Array(3)].map((_, i) => (
+                <div
+                  key={i}
+                  className="p-3.5 bg-black/60 border border-white/10 rounded-xl flex flex-col gap-2.5 animate-shimmer"
+                >
+                  <div className="flex items-center justify-between">
+                    <CyberSkeleton className="w-24 h-4 bg-white/[0.08]" />
+                    <CyberSkeleton className="w-16 h-4 rounded bg-white/[0.05]" />
+                  </div>
+                  <CyberSkeleton className="w-full h-3 bg-white/[0.04]" />
+                  <div className="pt-2 border-t border-white/[0.06] flex justify-between">
+                    <CyberSkeleton className="w-24 h-2.5 bg-white/[0.04]" />
+                    <CyberSkeleton className="w-16 h-2.5 bg-white/[0.03]" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Fleet Controls & Monitored Repositories Skeleton */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <CyberSkeleton className="w-32 h-4 bg-white/[0.06]" />
+              <CyberSkeleton className="w-20 h-4 bg-white/[0.04]" />
+            </div>
+            <CyberSkeletonRepo />
+            <CyberSkeletonRepo />
+            <CyberSkeletonRepo />
+          </div>
         </div>
       ) : apiError && repos.length === 0 ? (
         <SpotlightCard

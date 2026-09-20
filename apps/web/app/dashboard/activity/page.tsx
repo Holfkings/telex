@@ -5,11 +5,13 @@ import Link from "next/link";
 import { motion, AnimatePresence } from "motion/react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import { CyberSkeletonActivity } from "@/components/ui/CyberSkeleton";
 import type { ActivityItem } from "@/lib/api";
 
 export default function ActivityPage() {
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [apiError, setApiError] = useState<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -18,11 +20,18 @@ export default function ActivityPage() {
       try {
         const { getActivity } = await import("@/lib/api");
         const data = await getActivity();
-        if (isMounted && data?.activities) {
-          setActivities(data.activities);
+        if (isMounted) {
+          if (data?.activities) {
+            setActivities(data.activities);
+            setApiError(null);
+          } else {
+            setApiError("Unable to stream live event log.");
+          }
         }
-      } catch {
-        // Keep current state
+      } catch (err: any) {
+        if (isMounted) {
+          setApiError(err?.message || "Failed to connect to telemetry backend.");
+        }
       } finally {
         if (isMounted) setIsLoading(false);
       }
@@ -71,12 +80,49 @@ export default function ActivityPage() {
 
       {/* State 1: Loading */}
       {isLoading ? (
-        <div className="flex flex-col gap-3 animate-pulse">
-          <div className="h-20 rounded-xl border border-white/10 bg-black/40" />
-          <div className="h-20 rounded-xl border border-white/10 bg-black/40" />
-          <div className="h-20 rounded-xl border border-white/10 bg-black/40" />
-          <div className="h-20 rounded-xl border border-white/10 bg-black/40" />
+        <div className="flex flex-col gap-3 animate-fade-in" role="status" aria-label="Streaming activity feed">
+          <CyberSkeletonActivity />
+          <CyberSkeletonActivity />
+          <CyberSkeletonActivity />
+          <CyberSkeletonActivity />
         </div>
+      ) : apiError && activities.length === 0 ? (
+        /* State: Stream Connection Interrupted */
+        <SpotlightCard
+          spotlightColor="rgba(255, 255, 255, 0.08)"
+          className="p-8 sm:p-12 bg-black/70 backdrop-blur-xl border border-white/15 rounded-2xl flex flex-col items-center text-center gap-4 shadow-2xl"
+          enableTilt={false}
+        >
+          <div className="w-14 h-14 rounded-2xl bg-white/5 border border-white/15 flex items-center justify-center text-rose-400">
+            <svg
+              className="w-6 h-6 stroke-current"
+              viewBox="0 0 24 24"
+              fill="none"
+              strokeWidth="2"
+              aria-hidden="true"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+          </div>
+          <div className="flex flex-col gap-1 max-w-md">
+            <h2 className="font-mono font-bold text-lg text-white">
+              Event Stream Interrupted
+            </h2>
+            <p className="font-sans text-xs text-[#A1A1AA]">{apiError}</p>
+          </div>
+          <button
+            onClick={() => {
+              setIsLoading(true);
+              setApiError(null);
+              window.location.reload();
+            }}
+            className="px-4 py-2 rounded-lg bg-white text-black font-mono font-semibold text-xs hover:bg-white/90 transition-all cursor-pointer"
+          >
+            Reconnect Stream
+          </button>
+        </SpotlightCard>
       ) : activities.length === 0 ? (
         /* State 2: Empty State */
         <SpotlightCard

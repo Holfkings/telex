@@ -6,7 +6,7 @@ labels: ["bug"]
 assignees: ""
 ---
 
-<!-- Want to work on this issue? Please leave a comment asking to be assigned before starting work. Limit: 1 person per issue, max 2 active issues per contributor. -->
+<!-- Want to submit a fix? Small bug fixes are welcome as direct pull requests! For larger refactors, feel free to leave a comment to coordinate. -->
 
 **Describe the bug**
 A clear and concise description of what the bug is.

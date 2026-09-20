@@ -4,6 +4,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import SpotlightCard from "@/components/ui/SpotlightCard";
 import KineticHeader from "@/components/ui/KineticHeader";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
+import { CyberSkeleton } from "@/components/ui/CyberSkeleton";
 import { getApiUrl } from "@/lib/api";
 
 // ── Provider catalogue ────────────────────────────────────────────────────────
@@ -237,9 +238,16 @@ function ProviderCard({
                     id={`btn-remove-${provider.id}`}
                     onClick={handleRemove}
                     disabled={removing}
-                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-red-500/30 text-red-400 hover:border-red-400 hover:text-red-300 transition-colors disabled:opacity-50"
+                    className="font-mono text-[11px] px-3 py-1.5 rounded border border-red-500/30 text-red-400 hover:border-red-400 hover:text-red-300 transition-colors disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
                   >
-                    {removing ? "Removing…" : "Remove"}
+                    {removing ? (
+                      <>
+                        <span className="w-2.5 h-2.5 rounded-full border-2 border-red-400/30 border-t-red-400 animate-spin" />
+                        <span>Removing…</span>
+                      </>
+                    ) : (
+                      "Remove"
+                    )}
                   </button>
                 </>
               ) : (
@@ -273,9 +281,16 @@ function ProviderCard({
               id={`btn-save-${provider.id}`}
               onClick={handleSave}
               disabled={saving || !inputKey.trim()}
-              className="font-mono text-[11px] px-4 py-2 rounded bg-white text-black font-semibold hover:bg-white/90 transition-colors disabled:opacity-40"
+              className="font-mono text-[11px] px-4 py-2 rounded bg-white text-black font-semibold hover:bg-white/90 transition-colors disabled:opacity-40 flex items-center gap-1.5 cursor-pointer"
             >
-              {saving ? "Saving…" : "Save"}
+              {saving ? (
+                <>
+                  <span className="w-3 h-3 rounded-full border-2 border-black/30 border-t-black animate-spin" />
+                  <span>Encrypting…</span>
+                </>
+              ) : (
+                "Save"
+              )}
             </button>
           </div>
         )}
@@ -363,12 +378,24 @@ export default function SettingsPage() {
         )}
 
         {loading ? (
-          <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-3 animate-fade-in" role="status" aria-label="Loading provider keys">
             {[...Array(3)].map((_, i) => (
               <div
                 key={i}
-                className="h-16 rounded-xl bg-white/5 border border-white/10 animate-pulse"
-              />
+                className="p-5 rounded-xl border border-white/10 bg-black/60 backdrop-blur-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-shimmer"
+              >
+                <div className="flex items-center gap-3.5">
+                  <CyberSkeleton variant="circle" className="w-9 h-9 bg-white/[0.08]" />
+                  <div className="flex flex-col gap-2">
+                    <CyberSkeleton className="w-28 h-4 bg-white/[0.08]" />
+                    <CyberSkeleton className="w-48 h-3 bg-white/[0.04]" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <CyberSkeleton className="w-20 h-5 rounded-full bg-white/[0.04]" />
+                  <CyberSkeleton className="w-20 h-8 rounded-lg bg-white/[0.06]" />
+                </div>
+              </div>
             ))}
           </div>
         ) : (

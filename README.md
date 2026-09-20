@@ -139,16 +139,24 @@ npm install && npm run dev
 ## Tests
 
 ```bash
-cd apps/api && pytest -v
-# 26/26 passing
+cd apps/api
+pytest -v
 ```
 
-| Suite | Tests | Coverage |
-|---|---|---|
-| `test_code_scanner.py` | 7 | AST scanning across TS, TSX, JS, Python |
-| `test_patch_generation.py` | 11 | Best-of-N, micro-apply, sandbox gate |
-| `test_validate_patch.py` | 5 | Verification modes, disclosure, gating |
-| `test_webhooks.py` | 3 | PR merged / closed / reopened lifecycle |
+The backend test suite covers:
+
+- **AST code scanning**: Symbol call-site extraction across TypeScript, TSX, JavaScript, and Python.
+- **Dependency change extraction**: LLM parsing of structured breaking changes and confidence scoring.
+- **Patch generation**: Multi-candidate generation, micro-apply validation, and minimal diff selection.
+- **Patch validation**: Ephemeral sandbox CI execution, test suite and typecheck gates.
+- **GitHub integration**: App installation syncing, branches, check runs, and human-review PR workflows.
+- **Job queue**: PostgreSQL `SKIP LOCKED` worker queues with per-installation fairness caps and heartbeats.
+- **Repository management**: Policy toggles, telemetry polling, and synchronization.
+- **Authentication & Webhooks**: GitHub App HMAC verification and JWT sessions.
+- **Provider configuration**: Encrypted BYOK key management across 10 LLM providers.
+- **Breaking-change fixtures**: Real-world benchmarks for breaking dependency updates.
+
+> **Note on Test Coverage**: The `apps/api` test suite enforces a ≥80% branch and statement coverage gate in CI. Integration-heavy modules that interface directly with external platforms (such as live PyGithub API calls and remote runner operations) are decoupled with mock harnesses or verified via end-to-end sandbox workflows.
 
 ---
 
@@ -166,7 +174,7 @@ apps/api/
     crypto.py           Fernet BYOK key encryption (single swappable _get_master_key)
     github_service.py   GitHub App: branches · PRs · Check Runs · rate-limit backoff
     patch_providers/    10 LLM implementations + BYOK-aware factory
-  tests/                26 tests + real breaking-change benchmark fixtures
+  tests/                Unit and integration test suite with benchmark fixtures
 
 apps/web/app/dashboard/
   page.tsx              Telemetry overview
