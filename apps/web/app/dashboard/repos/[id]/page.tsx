@@ -21,7 +21,7 @@ export default function RepoDetailPage({
 
   const [repo, setRepo] = useState<RepoDetails | null>(null);
   const [patches, setPatches] = useState<PatchSummary[]>([]);
-  const [selectedPatchIndex, setSelectedPatchIndex] = useState<number>(0);
+  const [selectedPatchId, setSelectedPatchId] = useState<string | null>(null);
   const [sortMode, setSortMode] = useState<SortMode>("all");
   const [aiExplanation, setAiExplanation] = useState<AIExplanation | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
@@ -155,8 +155,7 @@ export default function RepoDetailPage({
   }
 
   const displayPatches = sortPatches(patches, sortMode);
-  const selectedIdx = selectedPatchIndex < displayPatches.length ? selectedPatchIndex : 0;
-  const activePatch = displayPatches[selectedIdx] || null;
+  const selectedPatch = displayPatches.find((p) => p.id === selectedPatchId) || displayPatches[0] || null;
 
   return (
     <div className="flex flex-col gap-6 relative z-10 max-w-7xl mx-auto w-full">
@@ -256,15 +255,37 @@ export default function RepoDetailPage({
           </SpotlightCard>
         ) : (
           /* State 3: Populated Patches + Live Validation Disclosure */
-          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-            {/* Left list: Patches */}
+          displayPatches.length === 0 ? (
+            <SpotlightCard
+              spotlightColor="rgba(255, 255, 255, 0.05)"
+              className="p-8 sm:p-10 bg-black/60 backdrop-blur-xl border border-white/10 rounded-xl flex flex-col items-center text-center gap-3"
+              enableTilt={false}
+            >
+              <div className="w-12 h-12 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-white">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div className="flex flex-col gap-1 max-w-md">
+                <h3 className="font-mono font-bold text-sm text-white">
+                  No patches match the current filter
+                </h3>
+                <p className="font-sans text-xs text-[#A1A1AA] leading-relaxed">
+                  Try a different sort mode or check back later for new patches.
+                </p>
+              </div>
+            </SpotlightCard>
+          ) : (
+            /* State 3: Populated Patches + Live Validation Disclosure */
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+              {/* Left list: Patches */}
             <div className="lg:col-span-4 flex flex-col gap-2">
-              {displayPatches.map((patch, idx) => (
+              {displayPatches.map((patch) => (
                 <button
                   key={patch.id}
-                  onClick={() => setSelectedPatchIndex(idx)}
+                  onClick={() => setSelectedPatchId(patch.id)}
                   className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1.5 cursor-pointer ${
-                    selectedPatchIndex === idx
+                    selectedPatch?.id === patch.id
                       ? "bg-white/[0.08] border-white/30 shadow-md"
                       : "bg-black/50 border-white/[0.08] hover:border-white/20"
                   }`}
@@ -311,7 +332,7 @@ export default function RepoDetailPage({
 
             {/* Right details: Selected Patch Detail & Diff Viewer */}
             <div className="lg:col-span-8 flex flex-col gap-3">
-              {activePatch && (
+              {selectedPatch && (
                 <SpotlightCard
                   spotlightColor="rgba(255, 255, 255, 0.05)"
                   className="p-4 sm:p-5 bg-black/70 backdrop-blur-xl border border-white/15 rounded-xl flex flex-col gap-4 shadow-lg"
@@ -322,22 +343,22 @@ export default function RepoDetailPage({
                     <div className="flex flex-col gap-0.5">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-bold text-sm text-white">
-                          Patch for {activePatch.package}
+                          Patch for {selectedPatch.package}
                         </span>
-                        {activePatch.change_type && (
+                        {selectedPatch.change_type && (
                           <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white uppercase border border-white/15">
-                            {activePatch.change_type}
+                            {selectedPatch.change_type}
                           </span>
                         )}
                       </div>
                       <span className="font-sans text-xs text-[#A1A1AA]">
-                        {activePatch.change_description || "Call-site automated AST rewrite"}
+                        {selectedPatch.change_description || "Call-site automated AST rewrite"}
                       </span>
                     </div>
 
-                    {activePatch.pr_url && (
+                    {selectedPatch.pr_url && (
                       <Link
-                        href={activePatch.pr_url}
+                        href={selectedPatch.pr_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-xs font-semibold px-3 py-1.5 rounded-lg bg-white text-black hover:bg-white/90 transition-all flex items-center gap-1.5 self-start sm:self-auto shadow-sm"
@@ -355,21 +376,21 @@ export default function RepoDetailPage({
                     <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
                       <span className="text-[10px] text-[#71717A] uppercase">Verification Mode</span>
                       <span className="font-bold text-white">
-                        {activePatch.verification_mode === "full" ? "Isolated Sandbox (CI)" : "Structural AST Only"}
+                        {selectedPatch.verification_mode === "full" ? "Isolated Sandbox (CI)" : "Structural AST Only"}
                       </span>
                     </div>
 
                     <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
                       <span className="text-[10px] text-[#71717A] uppercase">Test Suite Gate</span>
                       <span className="font-bold text-white flex items-center gap-1.5">
-                        {activePatch.tests_passed === true ? (
+                        {selectedPatch.tests_passed === true ? (
                           <>
                             <svg className="w-3.5 h-3.5 text-emerald-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                             <span className="text-emerald-400">Passing (100%)</span>
                           </>
-                        ) : activePatch.tests_passed === false ? (
+                        ) : selectedPatch.tests_passed === false ? (
                           <>
                             <svg className="w-3.5 h-3.5 text-rose-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
                               <line x1="18" y1="6" x2="6" y2="18" />
@@ -386,14 +407,14 @@ export default function RepoDetailPage({
                     <div className="p-2.5 rounded-lg bg-white/[0.02] border border-white/[0.06] flex flex-col gap-1">
                       <span className="text-[10px] text-[#71717A] uppercase">Typecheck Gate</span>
                       <span className="font-bold text-white flex items-center gap-1.5">
-                        {activePatch.typecheck_passed === true ? (
+                        {selectedPatch.typecheck_passed === true ? (
                           <>
                             <svg className="w-3.5 h-3.5 text-emerald-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
                               <polyline points="20 6 9 17 4 12" />
                             </svg>
                             <span className="text-emerald-400">Passing</span>
                           </>
-                        ) : activePatch.typecheck_passed === false ? (
+                        ) : selectedPatch.typecheck_passed === false ? (
                           <>
                             <svg className="w-3.5 h-3.5 text-rose-400 stroke-current" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" aria-hidden="true">
                               <line x1="18" y1="6" x2="6" y2="18" />
@@ -409,14 +430,14 @@ export default function RepoDetailPage({
                   </div>
 
                   {/* Diff Viewer */}
-                  {activePatch.diff ? (
+                  {selectedPatch.diff ? (
                     <div className="flex flex-col gap-1.5">
                       <span className="font-mono text-[11px] text-[#71717A] uppercase tracking-wider">
                         Synthesized Unified Diff
                       </span>
                       <DiffViewer
-                        diff={activePatch.diff}
-                        filename={activePatch.package}
+                        diff={selectedPatch.diff}
+                        filename={selectedPatch.package}
                         animated={false}
                       />
                     </div>

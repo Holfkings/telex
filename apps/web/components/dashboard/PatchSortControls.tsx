@@ -29,7 +29,7 @@ function sortedAndFiltered(
         p.status !== "merged" &&
         p.status !== "verified" &&
         p.status !== "closed" &&
-        (!p.is_semantic_risk || p.is_semantic_risk === true),
+        (p.is_semantic_risk === true || p.tests_passed !== true || p.typecheck_passed !== true),
     );
   }
 
