@@ -1,10 +1,8 @@
 import os
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
-
-from pathlib import Path
 
 _API_DIR = Path(__file__).resolve().parent
 _REPO_ROOT = _API_DIR.parent.parent

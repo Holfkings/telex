@@ -10,12 +10,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from dotenv import load_dotenv
-
-_API_DIR = Path(__file__).resolve().parent
-load_dotenv(_API_DIR / ".env")
-load_dotenv(_API_DIR.parent.parent / ".env")
-load_dotenv()
-
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -24,6 +18,11 @@ from config import settings
 from routers import auth, packages, repos, stats, webhooks
 from routers import settings as settings_router
 from services.logging_utils import install_redacting_formatters
+
+_API_DIR = Path(__file__).resolve().parent
+load_dotenv(_API_DIR / ".env")
+load_dotenv(_API_DIR.parent.parent / ".env")
+load_dotenv()
 
 logging.basicConfig(
     level=logging.INFO,
