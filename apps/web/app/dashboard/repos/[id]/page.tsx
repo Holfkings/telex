@@ -8,6 +8,7 @@ import BorderBeam from "@/components/ui/BorderBeam";
 import CyberGridBackground from "@/components/ui/CyberGridBackground";
 import { CyberSkeletonPatch } from "@/components/ui/CyberSkeleton";
 import DiffViewer from "@/components/dashboard/DiffViewer";
+import PatchSortControls, { SortMode, sortPatches } from "@/components/dashboard/PatchSortControls";
 import type { RepoDetails, AIExplanation, PatchSummary } from "@/lib/api";
 
 export default function RepoDetailPage({
@@ -21,6 +22,7 @@ export default function RepoDetailPage({
   const [repo, setRepo] = useState<RepoDetails | null>(null);
   const [patches, setPatches] = useState<PatchSummary[]>([]);
   const [selectedPatchIndex, setSelectedPatchIndex] = useState<number>(0);
+  const [sortMode, setSortMode] = useState<SortMode>("all");
   const [aiExplanation, setAiExplanation] = useState<AIExplanation | null>(null);
   const [aiError, setAiError] = useState<string | null>(null);
   const [isLoadingAi, setIsLoadingAi] = useState(false);
@@ -152,7 +154,9 @@ export default function RepoDetailPage({
     );
   }
 
-  const activePatch = patches[selectedPatchIndex] || null;
+  const displayPatches = sortPatches(patches, sortMode);
+  const selectedIdx = selectedPatchIndex < displayPatches.length ? selectedPatchIndex : 0;
+  const activePatch = displayPatches[selectedIdx] || null;
 
   return (
     <div className="flex flex-col gap-6 relative z-10 max-w-7xl mx-auto w-full">
@@ -221,10 +225,12 @@ export default function RepoDetailPage({
             <h2 className="font-mono font-semibold text-sm text-white tracking-tight">
               Detected Breaking Changes & Patches
             </h2>
-            <span className="font-mono text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-[#A1A1AA] border border-white/15">
-              {patches.length} detected
-            </span>
           </div>
+          <PatchSortControls
+            activeMode={sortMode}
+            onModeChange={setSortMode}
+            patchCount={patches.length}
+          />
         </div>
 
         {/* State 2: Empty State for Patches */}
@@ -253,7 +259,7 @@ export default function RepoDetailPage({
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
             {/* Left list: Patches */}
             <div className="lg:col-span-4 flex flex-col gap-2">
-              {patches.map((patch, idx) => (
+              {displayPatches.map((patch, idx) => (
                 <button
                   key={patch.id}
                   onClick={() => setSelectedPatchIndex(idx)}
@@ -267,9 +273,21 @@ export default function RepoDetailPage({
                     <span className="font-mono text-xs font-bold text-white truncate">
                       {patch.package}
                     </span>
-                    <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white border border-white/15 flex-shrink-0">
-                      {patch.status}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/10 text-white border border-white/15">
+                        {patch.status}
+                      </span>
+                      {patch.confidence !== undefined && patch.confidence !== null && (
+                        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-white/5 text-[#A1A1AA] border border-white/10">
+                          {(patch.confidence * 100).toFixed(0)}%
+                        </span>
+                      )}
+                      {patch.is_semantic_risk === true && (
+                        <span className="font-mono text-[9px] px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                          SEMANTIC
+                        </span>
+                      )}
+                    </div>
                   </div>
 
                   {patch.change_description && (
