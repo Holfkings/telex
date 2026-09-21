@@ -16,6 +16,16 @@ export const SORT_MODES: { value: SortMode; label: string }[] = [
   { value: "needs-review", label: "Needs Review" },
 ];
 
+/**
+ * Sort and filter a patch list according to the active triage mode.
+ *
+ * Modes:
+ * - `"all"`: preserve the original DB order (no-op).
+ * - `"semantic-risk-first"`: semantic-risk patches first, then by confidence desc.
+ * - `"high-confidence"`: confidence descending, opened_at as tie-break.
+ * - `"needs-review"`: hide merged/verified/closed; surface semantic-risk or
+ *   patches where tests_passed or typecheck_passed is not true.
+ */
 function sortedAndFiltered(
   patches: PatchSummary[],
   mode: SortMode,

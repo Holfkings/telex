@@ -9,6 +9,10 @@ export function getApiUrl(): string {
   return API_BASE;
 }
 
+/**
+ * Low-level fetch wrapper for the FastAPI backend.
+ * Sets Content-Type and credentials headers, throws on non-OK responses.
+ */
 async function apiFetch<T>(path: string, options?: RequestInit): Promise<T> {
   const reqHeaders: Record<string, string> = {
     "Content-Type": "application/json",

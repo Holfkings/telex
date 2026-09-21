@@ -11,6 +11,11 @@ import DiffViewer from "@/components/dashboard/DiffViewer";
 import PatchSortControls, { SortMode, sortPatches } from "@/components/dashboard/PatchSortControls";
 import type { RepoDetails, AIExplanation, PatchSummary } from "@/lib/api";
 
+/**
+ * Repository detail page — shows detected breaking changes & patches
+ * with client-side triage sorting (semantic-risk-first, high-confidence,
+ * needs-review) and a Gemini architecture radar.
+ */
 export default function RepoDetailPage({
   params,
 }: {
